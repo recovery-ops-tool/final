@@ -1,6 +1,12 @@
-// Browser-native voice I/O for Lucien — no backend involved. Both APIs are
-// widely supported in Chromium/Safari but absent in some browsers, so every
-// entry point here is a no-op (or reports unsupported) rather than throwing.
+// Voice I/O for Lucien. Spoken replies use the browser's built-in
+// speechSynthesis (or an HF-TTS clip from the backend) — no recording
+// involved. Dictation records the mic locally with MediaRecorder and sends
+// the clip to the backend (tts-service's Whisper /stt endpoint, proxied
+// through LucienController) for transcription — the browser's own
+// SpeechRecognition API was tried first but dropped: Chrome routes it
+// through an undocumented, third-party-unsupported Google endpoint that
+// reliably fails silently (no result, no error, indefinite "listening")
+// for non-google.com origins.
 
 function stripForSpeech(text: string): string {
   return text
@@ -67,59 +73,76 @@ export function playSpeechClip(audio: Blob): Promise<void> {
   });
 }
 
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-interface SpeechRecognitionLike extends EventTarget {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start(): void;
-  stop(): void;
-  onresult: ((event: any) => void) | null;
-  onerror: ((event: any) => void) | null;
-  onend: (() => void) | null;
+export function isMicRecordingSupported(): boolean {
+  return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
+    && typeof MediaRecorder !== 'undefined';
 }
 
-function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
-  if (typeof window === 'undefined') return null;
-  const w = window as any;
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+export interface Recording {
+  /** Stops the recorder and resolves with the captured clip. */
+  stop: () => Promise<Blob>;
+  /** Discards the recording without producing a clip (e.g. panel closed mid-record). */
+  cancel: () => void;
 }
 
-export function isSpeechRecognitionSupported(): boolean {
-  return getSpeechRecognitionCtor() !== null;
-}
+/** Preferred codec for MediaRecorder output — the tts-service /stt endpoint decodes via PyAV, which handles this fine; falls back to the browser default if unsupported. */
+const PREFERRED_MIME_TYPE = 'audio/webm;codecs=opus';
 
 /**
- * Starts live dictation. `onTranscript` fires on every interim and final
- * result with the full transcript accumulated so far in this session.
- * `locale` is a BCP-47 tag (e.g. 'hi-IN'); defaults to the browser's
- * language when omitted. Returns a stop() function, or null if the browser
- * has no speech API.
+ * Requests mic access and starts recording immediately. The caller calls
+ * `stop()` when the user releases the mic button to get the clip back for
+ * upload. Throws the `getUserMedia` rejection (e.g. a `DOMException` named
+ * `NotAllowedError`/`NotFoundError`/`NotReadableError`) if access fails, or
+ * if the browser lacks microphone/MediaRecorder support.
  */
-export function startDictation(
-  onTranscript: (transcript: string) => void,
-  onEnd: () => void,
-  locale?: string,
-): (() => void) | null {
-  const Ctor = getSpeechRecognitionCtor();
-  if (!Ctor) return null;
+export async function startRecording(): Promise<Recording> {
+  if (!isMicRecordingSupported()) throw new Error('unsupported');
 
-  const recognition = new Ctor();
-  recognition.lang = locale || navigator.language || 'en-US';
-  recognition.continuous = true;
-  recognition.interimResults = true;
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const mimeType = MediaRecorder.isTypeSupported(PREFERRED_MIME_TYPE) ? PREFERRED_MIME_TYPE : undefined;
+  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  const chunks: BlobPart[] = [];
+  recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+  const stopTracks = () => stream.getTracks().forEach(t => t.stop());
 
-  recognition.onresult = (event: any) => {
-    let transcript = '';
-    for (let i = 0; i < event.results.length; i++) {
-      transcript += event.results[i][0].transcript;
-    }
-    onTranscript(transcript);
+  recorder.start(250);
+
+  return {
+    stop: () => new Promise<Blob>((resolve) => {
+      if (recorder.state === 'inactive') {
+        resolve(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }));
+        return;
+      }
+      recorder.onstop = () => {
+        stopTracks();
+        resolve(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }));
+      };
+      recorder.stop();
+    }),
+    cancel: () => {
+      recorder.onstop = null;
+      if (recorder.state !== 'inactive') recorder.stop();
+      stopTracks();
+    },
   };
-  recognition.onerror = () => onEnd();
-  recognition.onend = () => onEnd();
+}
 
-  recognition.start();
-  return () => recognition.stop();
+/** Turns a `getUserMedia`/recording failure into what the agent should be told. */
+export function micAccessErrorMessage(error: unknown): string {
+  const name = error instanceof DOMException ? error.name
+    : error instanceof Error && error.message === 'unsupported' ? 'unsupported'
+    : '';
+  switch (name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return "Microphone access is blocked for this site. Check the mic icon in your browser's address bar (and your OS microphone privacy settings), then try again.";
+    case 'NotFoundError':
+      return 'No microphone found — check one is connected and not in use by another app.';
+    case 'NotReadableError':
+      return 'Could not access the microphone — it may be in use by another app.';
+    case 'unsupported':
+      return "Voice input isn't supported in this browser.";
+    default:
+      return 'Could not start voice input — try again.';
+  }
 }

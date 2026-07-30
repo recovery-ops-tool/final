@@ -6,7 +6,7 @@ import {
 import { useAuth } from '../AuthContext';
 import { lucienApi, type VoiceLang } from '../api/lucienApi';
 import { extractApiError } from '../utils/extractApiError';
-import { speak, stopSpeaking } from '../utils/speech';
+import { speak, stopSpeaking, playSpeechClip } from '../utils/speech';
 import { Logo } from './Logo';
 import { LucienMessage, type ChatMessage, type Feedback } from './LucienMessage';
 import { LucienHistory } from './LucienHistory';
@@ -98,22 +98,26 @@ export default function LucienPanel({ open, onClose }: LucienPanelProps) {
 
   const handleVoiceLangChange = useCallback((lang: VoiceLang) => {
     setVoiceLang(lang);
-    if (lang !== 'en') setToast("This language's voice isn't available yet — replies will use the English voice.");
   }, []);
 
   /**
-   * Speaks a reply aloud via the browser's built-in voice. The local Indic
-   * TTS pipeline (tts-service/ + TranslationService) is CPU-only on agent
-   * hardware — measured at ~8-9 minutes per reply in isolation, and prone to
-   * timing out well past 15 minutes if a second reply overlaps it — so it
-   * isn't wired up here. Replies stay on the instant browser voice regardless
-   * of the selected language until a fast-enough synthesis path (GPU or
-   * hosted API) exists; the backend TTS/translation code is left in place
-   * for that point.
+   * Speaks a reply aloud. Uses the backend translation and synthesis pipeline
+   * for Indic languages, falling back to the browser's built-in voice.
    */
-  const speakReply = useCallback((text: string) => {
-    speak(text);
-  }, []);
+  const speakReply = useCallback(async (text: string) => {
+    if (voiceLang === 'en') {
+      speak(text);
+      return;
+    }
+
+    try {
+      const blob = await lucienApi.speak(text, voiceLang);
+      await playSpeechClip(blob);
+    } catch (e) {
+      console.warn('[lucien] backend TTS failed, falling back to browser voice:', e);
+      speak(text);
+    }
+  }, [voiceLang]);
 
   // inert when closed so nothing inside is tabbable behind the app
   useEffect(() => {
@@ -156,7 +160,8 @@ export default function LucienPanel({ open, onClose }: LucienPanelProps) {
 
   useEffect(() => {
     if (!toast) return;
-    const id = window.setTimeout(() => setToast(null), 2600);
+    // Longer messages (e.g. mic-permission instructions) get more time on screen to read.
+    const id = window.setTimeout(() => setToast(null), Math.max(2600, toast.length * 60));
     return () => window.clearTimeout(id);
   }, [toast]);
 
@@ -534,7 +539,7 @@ export default function LucienPanel({ open, onClose }: LucienPanelProps) {
               : isReady ? 'Ask Lucien…'
               : 'Connecting…'
           }
-          onUnavailable={what => setToast(`${what} isn't available yet.`)}
+          onUnavailable={what => setToast(/[.!?]$/.test(what) ? what : `${what} isn't available yet.`)}
           voiceLang={voiceLang}
           onVoiceLangChange={handleVoiceLangChange}
         />

@@ -1,5 +1,10 @@
-# Lucien Indic TTS microservice — wraps ai4bharat/IndicF5 (F5-TTS-style voice
-# cloning). Recommended: Python 3.10 or 3.11 (IndicF5 upstream target).
+# Lucien voice microservice — wraps ai4bharat/IndicF5 (F5-TTS-style voice
+# cloning) for TTS and faster-whisper for STT. Recommended: Python 3.10 or
+# 3.11 (IndicF5 upstream target).
+#
+# Only need dictation (/stt), not spoken replies (/tts)? Use
+# requirements-stt.txt instead — it skips the heavy/gated IndicF5 stack
+# entirely and has no Python-version pin.
 #
 # Setup:
 #   python -m venv .venv
@@ -43,3 +48,12 @@ transformers_stream_generator==0.0.5
 unidecode==1.4.0
 vocos==0.1.0
 x_transformers==2.24.0
+
+# STT (/stt) — faster-whisper (CTranslate2) for fast CPU transcription of short
+# dictation clips; unlike IndicF5 TTS this stays fast enough for interactive use.
+# Left unpinned (unlike the rest of this file): pin to whatever's current at setup
+# time rather than a version number that may be long superseded by the time this
+# service is actually installed.
+faster-whisper
+av              # audio decode backend faster-whisper uses (handles webm/opus from MediaRecorder)
+python-multipart  # required by FastAPI to parse the multipart/form-data upload

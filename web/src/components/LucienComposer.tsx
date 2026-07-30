@@ -1,19 +1,12 @@
+import 'regenerator-runtime/runtime';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AudioLines, Plus, SendHorizontal, Square } from 'lucide-react';
-import { isSpeechRecognitionSupported, startDictation, stopSpeaking } from '../utils/speech';
-import type { VoiceLang } from '../api/lucienApi';
+import { AudioLines, Loader2, Plus, SendHorizontal, Square } from 'lucide-react';
+import { stopSpeaking } from '../utils/speech';
+import { type VoiceLang } from '../api/lucienApi';
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 
 const MAX_CHARS = 2000;
 const COUNTER_AT = 1600; // only surface the counter once it starts to matter
-
-/** BCP-47 dictation locale for each voice language — also drives what the mic understands. */
-const DICTATION_LOCALE: Record<VoiceLang, string> = {
-  en: '', // '' -> startDictation falls back to navigator.language
-  hi: 'hi-IN',
-  ta: 'ta-IN',
-  kn: 'kn-IN',
-  te: 'te-IN',
-};
 
 const VOICE_LANG_OPTIONS: { value: VoiceLang; label: string }[] = [
   { value: 'en', label: 'EN' },
@@ -22,6 +15,14 @@ const VOICE_LANG_OPTIONS: { value: VoiceLang; label: string }[] = [
   { value: 'kn', label: 'ಕನ್ನ' },
   { value: 'te', label: 'తెలు' },
 ];
+
+const LANG_MAP: Record<VoiceLang, string> = {
+  en: 'en-US',
+  hi: 'hi-IN',
+  ta: 'ta-IN',
+  kn: 'kn-IN',
+  te: 'te-IN',
+};
 
 interface Props {
   value: string;
@@ -34,7 +35,7 @@ interface Props {
   placeholder: string;
   /** Raised when a control has no backend yet, so the panel can explain itself. */
   onUnavailable: (what: string) => void;
-  /** Language used both for spoken replies and for dictation's recognition locale. */
+  /** Language used both for spoken replies and to hint the transcription backend. */
   voiceLang: VoiceLang;
   onVoiceLangChange: (lang: VoiceLang) => void;
 }
@@ -44,46 +45,74 @@ export const LucienComposer = React.forwardRef<HTMLTextAreaElement, Props>(funct
 ) {
   const innerRef = useRef<HTMLTextAreaElement | null>(null);
   const [focused, setFocused] = useState(false);
-  const [listening, setListening] = useState(false);
-  const stopDictationRef = useRef<(() => void) | null>(null);
-  const dictationBaseRef = useRef('');
+  const [micState, setMicState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const startValueRef = useRef('');
+  const valueRef = useRef(value);
+  valueRef.current = value;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const stopDictation = useCallback(() => {
-    stopDictationRef.current?.();
-    stopDictationRef.current = null;
-    setListening(false);
+  const {
+    transcript,
+    resetTranscript,
+    browserSupportsSpeechRecognition,
+  } = useSpeechRecognition();
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      SpeechRecognition.abortListening();
+    };
   }, []);
 
-  // Stop a live mic session if the composer becomes unusable (reply completes
-  // and clears the field, session ends, etc.) so it doesn't keep listening
-  // into a control the user can no longer see is active.
-  useEffect(() => () => stopDictationRef.current?.(), []);
+  // Update textbox value live as transcript changes
+  useEffect(() => {
+    if (micState === 'recording' && transcript) {
+      const base = startValueRef.current ? startValueRef.current + ' ' : '';
+      onChangeRef.current((base + transcript).slice(0, MAX_CHARS));
+    }
+  }, [transcript, micState]);
 
-  const toggleDictation = useCallback(() => {
-    if (listening) {
-      stopDictation();
+  const cancelRecording = useCallback(() => {
+    SpeechRecognition.abortListening();
+    setMicState('idle');
+  }, []);
+
+  const toggleMic = useCallback(async () => {
+    console.warn('[lucien-mic] toggleMic clicked, micState =', micState);
+
+    if (micState === 'transcribing') {
       return;
     }
-    if (!isSpeechRecognitionSupported()) {
-      onUnavailable('Voice input');
+
+    if (micState === 'recording') {
+      SpeechRecognition.stopListening();
+      setMicState('idle');
       return;
     }
+
+    if (!browserSupportsSpeechRecognition) {
+      console.warn('[lucien-mic] SpeechRecognition not supported in this browser');
+      onUnavailable('Voice input (SpeechRecognition not supported in this browser)');
+      return;
+    }
+
     stopSpeaking(); // don't let Lucien talk over the user
-    dictationBaseRef.current = value ? value + ' ' : '';
-    const stop = startDictation(
-      (transcript) => onChangeRef.current((dictationBaseRef.current + transcript).slice(0, MAX_CHARS)),
-      () => { stopDictationRef.current = null; setListening(false); },
-      DICTATION_LOCALE[voiceLang] || undefined,
-    );
-    if (!stop) {
-      onUnavailable('Voice input');
-      return;
+    try {
+      console.warn('[lucien-mic] starting speech recognition…');
+      startValueRef.current = valueRef.current;
+      resetTranscript();
+      setMicState('recording');
+      await SpeechRecognition.startListening({
+        continuous: true,
+        language: LANG_MAP[voiceLang] || 'en-US',
+      });
+    } catch (e) {
+      console.error('[lucien-mic] SpeechRecognition failed to start:', e);
+      onUnavailable('Could not start voice input.');
+      setMicState('idle');
     }
-    stopDictationRef.current = stop;
-    setListening(true);
-  }, [listening, onUnavailable, stopDictation, value, voiceLang]);
+  }, [micState, onUnavailable, voiceLang, browserSupportsSpeechRecognition, resetTranscript]);
 
   const setRefs = useCallback((el: HTMLTextAreaElement | null) => {
     innerRef.current = el;
@@ -103,16 +132,18 @@ export const LucienComposer = React.forwardRef<HTMLTextAreaElement, Props>(funct
   const remaining = MAX_CHARS - value.length;
 
   const handleSend = useCallback(() => {
-    if (listening) stopDictation();
+    if (micState !== 'idle') cancelRecording();
     onSend();
-  }, [listening, onSend, stopDictation]);
+  }, [micState, cancelRecording, onSend]);
+
+  const listening = micState !== 'idle';
 
   return (
     <div className="lucien-composer-wrap">
       {listening && (
         <div className="lucien-listening-badge" role="status">
           <span className="lucien-listening-dot" aria-hidden="true" />
-          Listening…
+          {micState === 'recording' ? 'Listening…' : 'Transcribing…'}
         </div>
       )}
       <div className={`lucien-composer${focused ? ' is-focused' : ''}${disabled ? ' is-disabled' : ''}`}>
@@ -155,12 +186,15 @@ export const LucienComposer = React.forwardRef<HTMLTextAreaElement, Props>(funct
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          <button type="button" className={`lucien-composer-tool${listening ? ' is-listening' : ''}`}
-            onClick={toggleDictation}
-            aria-label={listening ? 'Stop dictation' : 'Dictate a message'}
-            aria-pressed={listening}
-            title={listening ? 'Stop dictation' : 'Dictate a message'}>
-            <AudioLines size={16} aria-hidden="true" />
+          <button type="button" className={`lucien-composer-tool${micState === 'recording' ? ' is-listening' : ''}`}
+            onClick={toggleMic}
+            disabled={micState === 'transcribing'}
+            aria-label={micState === 'recording' ? 'Stop dictation' : 'Dictate a message'}
+            aria-pressed={micState === 'recording'}
+            title={micState === 'recording' ? 'Stop dictation' : 'Dictate a message'}>
+            {micState === 'transcribing'
+              ? <Loader2 size={16} className="lucien-spin" aria-hidden="true" />
+              : <AudioLines size={16} aria-hidden="true" />}
           </button>
           {busy ? (
             <button type="button" className="lucien-composer-send is-stop" onClick={onStop}

@@ -4,6 +4,8 @@ import type { ApiResponse, PagedResponse } from '../types';
 export interface StartSessionRequest {
   agentId: string;
   agentFirstName: string;
+  /** Starts a visit-interview session bound to this case instead of the general assistant. */
+  allocationId?: string;
 }
 
 export interface SessionResponse {
@@ -54,6 +56,17 @@ export interface ConfirmActionRequest {
   confirmed: boolean;
 }
 
+/** GPS captured at the moment the FO taps Confirm on a visit-interview summary card — freshest
+ * possible fix, matching the manual VisitSubmitPage flow's anti-fraud guarantee. */
+export interface ConfirmVisitActionRequest {
+  actionId: string;
+  confirmed: boolean;
+  latitude?: number;
+  longitude?: number;
+  gpsAccuracy?: number;
+  mockLocationDetected?: boolean;
+}
+
 /** Languages the local Indic TTS microservice (tts-service/) can speak. */
 export type IndicVoiceLang = 'hi' | 'ta' | 'kn' | 'te';
 
@@ -84,6 +97,29 @@ export const lucienApi = {
     const response = await axiosInstance.post<ApiResponse<ChatResponse>>(
       `/api/v1/lucien/sessions/${sessionId}/confirm`,
       data,
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Confirms (or cancels) the submit_visit_interview WRITE action for a visit-interview
+   * session. Multipart, not plain JSON like confirmAction — the site/selfie photos and a fresh
+   * GPS fix are attached here, at the moment the FO taps Confirm, never routed through Lucien.
+   */
+  confirmVisitAction: async (
+    sessionId: string,
+    data: ConfirmVisitActionRequest,
+    image1?: File | null,
+    image2?: File | null,
+  ): Promise<ChatResponse> => {
+    const fd = new FormData();
+    fd.append('data', new Blob([JSON.stringify(data)], { type: 'application/json' }));
+    if (image1) fd.append('image1', image1);
+    if (image2) fd.append('image2', image2);
+    const response = await axiosInstance.post<ApiResponse<ChatResponse>>(
+      `/api/v1/lucien/sessions/${sessionId}/confirm-visit`,
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
     );
     return response.data.data;
   },
@@ -139,5 +175,28 @@ export const lucienApi = {
       _noRetry: true,
     });
     return response.data;
+  },
+
+  /**
+   * Transcribes a recorded voice clip via the local tts-service's Whisper
+   * /stt endpoint (proxied through LucienController). Powers the composer's
+   * mic button. `_noToast`/`_noRetry` so the caller controls how a failure
+   * is surfaced (a toast next to the mic button, not the global error toast).
+   */
+  transcribe: async (audio: Blob, lang: VoiceLang, signal?: AbortSignal): Promise<string> => {
+    const form = new FormData();
+    form.append('audio', audio, `dictation.${audio.type.includes('wav') ? 'wav' : 'webm'}`);
+    form.append('lang', lang);
+    const response = await axiosInstance.post<ApiResponse<{ text: string }>>('/api/v1/lucien/transcribe', form, {
+      signal,
+      timeout: 30_000,
+      _noToast: true,
+      _noRetry: true,
+      // axiosInstance defaults Content-Type to application/json on every request,
+      // which overrides FormData's automatic multipart boundary header — unset it
+      // here so the browser sets the correct `multipart/form-data; boundary=...`.
+      headers: { 'Content-Type': undefined },
+    });
+    return response.data.data.text;
   },
 };

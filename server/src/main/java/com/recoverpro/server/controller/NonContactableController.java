@@ -11,6 +11,7 @@ import com.recoverpro.server.entity.NonContactable;
 import com.recoverpro.server.repository.NonContactableRepository;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.AllocationService;
+import com.recoverpro.server.service.NonContactableService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,7 @@ public class NonContactableController {
 
     private final NonContactableRepository repo;
     private final AllocationService allocationService;
+    private final NonContactableService nonContactableService;
 
     @PostMapping
     @PreAuthorize(SUBMITTERS)
@@ -53,37 +55,11 @@ public class NonContactableController {
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody CreateNonContactableRequest request) {
 
-        UUID orgId = principal.getOrganizationId();
-        if (orgId == null) {
-            throw new BusinessException("Caller has no organization context");
-        }
-
-        AllocationResponse alloc =
-                allocationService.getAllocationById(request.getAllocationId());
-
-        if (alloc.getOrganizationId() == null ||
-                !alloc.getOrganizationId().equals(orgId)) {
-            throw new ResourceNotFoundException("Allocation not found");
-        }
-
-        NonContactable saved = repo.save(
-                NonContactable.builder()
-                        .organizationId(orgId)
-                        .allocationId(request.getAllocationId())
-                        .visitId(request.getVisitId())
-                        .agentId(principal.getId())
-                        .reason(request.getReason())
-                        .notes(request.getNotes())
-                        .build()
-        );
-
-        log.info("Non-contactable recorded: case={} reason={} agent={}",
-                saved.getAllocationId(),
-                saved.getReason(),
-                saved.getAgentId());
+        NonContactableResponse response = nonContactableService.create(
+                request, principal.getId(), principal.getOrganizationId());
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.of("Non-contactable recorded", toResponse(saved)));
+                .body(ApiResponse.of("Non-contactable recorded", response));
     }
 
     @GetMapping("/{id}")

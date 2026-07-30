@@ -58,4 +58,7 @@ public class VisitLogRequest {
     private String visitNotes;
     private String internalRemarks;
     private String afterHoursOverrideReason;
+
+    /** Set only by the Lucien visit-interview tool, never by the manual form. */
+    private String lucienSessionId;
 }

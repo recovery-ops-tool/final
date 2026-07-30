@@ -50,6 +50,7 @@ public class VisitLogMapper {
                 .lastVisitedAddress(request.getLastVisitedAddress())
                 .visitNotes(request.getVisitNotes())
                 .internalRemarks(request.getInternalRemarks())
+                .lucienSessionId(request.getLucienSessionId())
                 .createdBy(createdBy)
                 .isDeleted(false)
                 .build();
@@ -114,6 +115,7 @@ public class VisitLogMapper {
                 .images(imageResponses)
                 .visitNotes(entity.getVisitNotes())
                 .internalRemarks(entity.getInternalRemarks())
+                .lucienSessionId(entity.getLucienSessionId())
                 .createdBy(entity.getCreatedBy())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())

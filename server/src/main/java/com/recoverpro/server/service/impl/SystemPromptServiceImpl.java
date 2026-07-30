@@ -76,9 +76,19 @@ public class SystemPromptServiceImpl implements SystemPromptService {
         return systemPromptConfigRepository.findByPromptKeyAndIsActiveTrue(promptKey)
                 .map(SystemPromptConfig::getPromptTemplate)
                 .orElseGet(() -> {
-                    log.warn("No active DB prompt found for key '{}'. Falling back to default.", promptKey);
-                    return DefaultSystemPrompt.TEMPLATE;
+                    log.warn("No active DB prompt found for key '{}'. Falling back to built-in default.", promptKey);
+                    return defaultTemplateFor(promptKey);
                 });
+    }
+
+    /** Each promptKey must fall back to ITS OWN built-in template, not always the general
+     * assistant one - otherwise a visit-interview session with no DB override would silently
+     * run the wrong (general) prompt. */
+    private String defaultTemplateFor(String promptKey) {
+        if (DefaultSystemPrompt.INTERVIEW_KEY.equals(promptKey)) {
+            return DefaultSystemPrompt.INTERVIEW_TEMPLATE;
+        }
+        return DefaultSystemPrompt.TEMPLATE;
     }
 
     private SystemPromptConfig findActiveConfig(String promptKey) {

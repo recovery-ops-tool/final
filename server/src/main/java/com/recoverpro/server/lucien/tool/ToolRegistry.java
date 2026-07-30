@@ -35,7 +35,7 @@ public class ToolRegistry {
         sb.append("Most messages (greetings, general questions, advice) need NO tool at all — ")
           .append("just answer directly in plain text with no <tool_call> block.\n");
         sb.append("Only emit a tool call when you need information or an action this list actually provides.\n");
-        sb.append("To call a tool respond with ONLY this format — no other text before or after:\n");
+        sb.append("To call a tool, output a <tool_call> block in this format at the end of your message (you may still output regular conversational text/responses before the block):\n");
         sb.append("<tool_call>\n{\"name\": \"tool_name\", \"args\": {\"key\": \"value\"}}\n</tool_call>\n\n");
         sb.append("Example — user says \"Hi\": respond in plain text, e.g. ")
           .append("\"Hi! How can I help with your cases today?\" — do not call a tool.\n\n");

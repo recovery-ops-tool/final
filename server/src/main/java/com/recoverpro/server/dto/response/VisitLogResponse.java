@@ -67,6 +67,7 @@ public class VisitLogResponse {
 
     private String visitNotes;
     private String internalRemarks;
+    private String lucienSessionId;
 
     private UUID createdBy;
     private Instant createdAt;

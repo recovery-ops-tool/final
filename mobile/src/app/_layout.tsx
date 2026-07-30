@@ -49,6 +49,10 @@ function RootNavigator() {
             options={{ headerShown: true, title: 'Log a visit', presentation: 'modal' }}
           />
           <Stack.Screen
+            name="case/[id]/lucien-visit"
+            options={{ headerShown: true, title: 'Visit interview', presentation: 'modal' }}
+          />
+          <Stack.Screen
             name="case/[id]/ptp"
             options={{ headerShown: true, title: 'Promise to pay', presentation: 'modal' }}
           />

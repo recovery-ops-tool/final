@@ -1,0 +1,17 @@
+/* Reuses LucienPanel's chat UI (rows, bubbles, composer, confirm banner) but embedded inline
+   in the page grid instead of floating fixed at the viewport edge. */
+.lucien-panel.is-embedded {
+  position: static;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  transform: none;
+  background: var(--bg-surface);
+}
+
+.lucien-panel.is-embedded.is-open {
+  transform: none;
+}

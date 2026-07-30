@@ -37,4 +37,18 @@ public class ToolExecutor {
             throw new RuntimeException("Failed to execute confirmed action: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * Same principal-ownership check as executeConfirmed, but executes with caller-supplied
+     * args instead of re-parsing action.getToolArgsJson() — used by VisitInterviewService to
+     * merge in server-verified allocationId/GPS/staged-image keys that were never part of the
+     * model's original tool call. Exceptions (e.g. BusinessException validation failures) are
+     * propagated as-is, not wrapped, so the caller can handle them.
+     */
+    public String executeWithOverride(PendingAction action, JsonNode overrideArgs, UserPrincipal principal) {
+        if (!principal.getId().equals(action.getPrincipalId())) {
+            throw new AccessDeniedException("Principal mismatch: this action belongs to a different user.");
+        }
+        return execute(action.getToolName(), overrideArgs, principal);
+    }
 }

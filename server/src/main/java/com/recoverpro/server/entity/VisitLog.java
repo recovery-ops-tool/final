@@ -147,6 +147,12 @@ public class VisitLog {
     @Column(name = "internal_remarks", columnDefinition = "TEXT")
     private String internalRemarks;
 
+    /** Set when this visit was captured via a Lucien visit-interview conversation, rather than
+     * the manual form - traces the record back to its full chat transcript for audit. Loose FK
+     * by convention (ChatSession.id, same pattern as lucien_agent_steps.session_id). */
+    @Column(name = "lucien_session_id", length = 36)
+    private String lucienSessionId;
+
     @Column(name = "created_by", nullable = false)
     private UUID createdBy;
 

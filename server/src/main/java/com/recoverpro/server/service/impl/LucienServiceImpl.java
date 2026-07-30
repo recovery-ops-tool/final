@@ -30,10 +30,13 @@ import com.recoverpro.server.repository.ChatSessionRepository;
 import com.recoverpro.server.security.OrgIsolationGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.AgentContextService;
+import com.recoverpro.server.service.AllocationService;
 import com.recoverpro.server.service.LucienService;
 import com.recoverpro.server.service.LucienTokenBudgetService;
 import com.recoverpro.server.service.SystemPromptService;
+import com.recoverpro.server.service.VisitInterviewContextService;
 import com.recoverpro.server.service.ai.ContextAssembler;
+import com.recoverpro.server.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -68,6 +71,8 @@ public class LucienServiceImpl implements LucienService {
     private final ToolRegistry toolRegistry;
     private final ConfirmationService confirmationService;
     private final OrgIsolationGuard orgIsolationGuard;
+    private final AllocationService allocationService;
+    private final VisitInterviewContextService visitInterviewContextService;
 
     @Value("${lucien.context.max-history-messages:20}")
     private int maxHistoryMessages;
@@ -82,16 +87,27 @@ public class LucienServiceImpl implements LucienService {
         // otherwise any agent could start (and force-close) a session as someone else (SEC-PLAN S5).
         UUID agentId = principal.getId();
         log.info("Starting Lucien session for agentId={}", agentId);
+
+        UUID allocationId = request.getAllocationId();
+        if (allocationId != null) {
+            // getAllocationById already enforces org isolation (throws ResourceNotFoundException
+            // for a different org) via OrgIsolationGuard reading the security context.
+            allocationService.getAllocationById(allocationId);
+            log.info("Starting Lucien visit-interview session: agentId={}, allocationId={}", agentId, allocationId);
+        }
+
         sessionRepository.closeAllSessionsForAgent(agentId, Instant.now());
         String safeFirstName = dataSanitizer.sanitizeAgentName(request.getAgentFirstName());
         ChatSession session = ChatSession.builder()
                 .agentId(agentId)
                 .agentFirstName(safeFirstName)
+                .allocationId(allocationId)
                 .isActive(true)
                 .totalMessages(0)
                 .build();
         ChatSession saved = sessionRepository.save(session);
-        log.info("Lucien session created: id={}, agentId={}", saved.getId(), saved.getAgentId());
+        log.info("Lucien session created: id={}, agentId={}, allocationId={}",
+                saved.getId(), saved.getAgentId(), saved.getAllocationId());
         return toSessionResponse(saved);
     }
 
@@ -341,9 +357,13 @@ public class LucienServiceImpl implements LucienService {
     private List<LlamaMessage> buildLlamaMessages(ChatSession session, UserPrincipal principal) {
         AgentContextDto ctx = agentContextService.buildContext(
                 session.getId(), session.getAgentId(), session.getAgentFirstName());
-        String promptTemplate = systemPromptService.resolveActiveTemplate(DefaultSystemPrompt.KEY);
+        boolean isVisitInterview = session.getAllocationId() != null;
+        String promptTemplate = systemPromptService.resolveActiveTemplate(
+                isVisitInterview ? DefaultSystemPrompt.INTERVIEW_KEY : DefaultSystemPrompt.KEY);
         String toolSchemas = toolRegistry.buildSchemaBlock();
-        String contextBlock = contextAssembler.assembleFor(session.getAgentId(), principal.getOrganizationId());
+        String contextBlock = isVisitInterview
+                ? visitInterviewContextService.buildContextBlock(session.getAllocationId())
+                : contextAssembler.assembleFor(session.getAgentId(), principal.getOrganizationId());
         String systemPrompt = systemPromptBuilder.buildWithTools(promptTemplate, ctx, toolSchemas + contextBlock);
 
         List<LlamaMessage> messages = new ArrayList<>();

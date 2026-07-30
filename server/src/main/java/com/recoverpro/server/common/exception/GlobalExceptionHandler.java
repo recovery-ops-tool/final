@@ -38,6 +38,12 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.SERVICE_UNAVAILABLE, "Service Unavailable", ex.getMessage(), req);
     }
 
+    @ExceptionHandler(SttUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleSttUnavailable(SttUnavailableException ex, HttpServletRequest req) {
+        log.warn("Lucien STT unavailable: {}", ex.getMessage());
+        return build(HttpStatus.SERVICE_UNAVAILABLE, "Service Unavailable", ex.getMessage(), req);
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusiness(BusinessException ex, HttpServletRequest req) {
         log.debug("Business rule violation: {}", ex.getMessage());

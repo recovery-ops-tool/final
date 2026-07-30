@@ -237,10 +237,10 @@ export default function MyCasesPage() {
                         key={c.id}
                         variants={fadeUp}
                         className="dd-case-row"
-                        onClick={() => navigate(`/app/visits/${c.id}/submit`)}
+                        onClick={() => navigate(`/app/visits/${c.id}/interview`)}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(e: React.KeyboardEvent) => { if(e.key==='Enter') navigate(`/app/visits/${c.id}/submit`); }}
+                        onKeyDown={(e: React.KeyboardEvent) => { if(e.key==='Enter') navigate(`/app/visits/${c.id}/interview`); }}
                       >
                         <div className="dd-case-info">
                           <span className="dd-case-borrower">{c.borrowerName || '—'}</span>

@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, Modal, Image, Pressable } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
-  MapPin, Handshake, Link2, Receipt, AlertTriangle, CloudOff, X, ImageIcon,
+  MapPin, Handshake, Link2, Receipt, AlertTriangle, CloudOff, X, ImageIcon, MessageSquare,
 } from 'lucide-react-native';
 import { useTheme } from '@/theme/useTheme';
 import { Screen, Text, Card, Badge, Button, Divider, LoadingView, EmptyState } from '@/components/ui';
@@ -124,6 +124,12 @@ export default function CaseDetailScreen() {
         </Card>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s3 }}>
+          <Button
+            label="Visit interview"
+            fullWidth={false}
+            onPress={() => router.push({ pathname: '/case/[id]/lucien-visit', params: { id } })}
+            icon={<MessageSquare size={16} color="#fff" />}
+          />
           <Button
             label="Log a visit"
             fullWidth={false}

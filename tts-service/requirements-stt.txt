@@ -1,0 +1,25 @@
+# STT-only subset of requirements.txt — runs app.py's /stt (dictation) endpoint
+# without the IndicF5 TTS stack (torch/transformers/gated model). Use this when
+# you just need the mic-button transcription path working: it's a much lighter,
+# faster, more reliable install (no HF_TOKEN, no Python 3.10/3.11 pin, no native
+# compilation), and app.py's /tts degrades to a clear 503 when its deps aren't
+# present, so the same process still serves /stt and /health normally.
+#
+# Setup:
+#   python -m venv .venv
+#   .venv/Scripts/python.exe -m pip install -r requirements-stt.txt
+#
+# To add TTS back later, install requirements.txt on top of this venv (or a
+# separate Python 3.10/3.11 venv) and set HF_TOKEN.
+
+fastapi==0.140.13
+uvicorn[standard]==0.51.0
+pydantic==2.13.4
+numpy==2.4.6
+
+# faster-whisper (CTranslate2) for fast CPU transcription of short dictation clips.
+# Left unpinned: pin to whatever's current at setup time rather than a version
+# number that may be long superseded by the time this service is installed.
+faster-whisper
+av              # audio decode backend faster-whisper uses (handles webm/opus from MediaRecorder)
+python-multipart  # required by FastAPI to parse the multipart/form-data upload

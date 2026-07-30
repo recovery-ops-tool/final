@@ -136,7 +136,10 @@ public class LucienAgentLoop {
                         .principalId(principal.getId())
                         .organizationId(principal.getOrganizationId())
                         .toolName(toolName)
-                        .toolArgsJson(toolCallJson)
+                        // Store the unwrapped args object, not the raw {"name":...,"args":{...}}
+                        // tool-call JSON — ToolExecutor.executeConfirmed() parses this directly
+                        // as the tool's args and hands it to LucienTool.execute(args, principal).
+                        .toolArgsJson(toolArgs.toString())
                         .humanSummary(summary)
                         .expiresAt(Instant.now().plusSeconds(PENDING_TTL_SECONDS))
                         .build();

@@ -98,10 +98,10 @@ export default function TodayVisitsPage() {
         <motion.div
           variants={fadeUp}
           className="dd-case-row"
-          onClick={() => navigate(`/app/visits/${c.id}/submit`)}
+          onClick={() => navigate(`/app/visits/${c.id}/interview`)}
           role="button"
           tabIndex={0}
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') navigate(`/app/visits/${c.id}/submit`); }}
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') navigate(`/app/visits/${c.id}/interview`); }}
         >
           <div className="dd-case-info" style={{ flex: '1 1 40%' }}>
             <span className="dd-case-borrower">{c.borrowerName || 'Unknown borrower'}</span>

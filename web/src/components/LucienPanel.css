@@ -936,14 +936,16 @@
   bottom: 76px;
   transform: translateX(-50%);
   z-index: 4;
+  max-width: calc(100% - 32px);
   padding: 6px 12px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-lg, 10px);
   background: var(--ink-primary);
   color: var(--text-on-solid);
   font-family: var(--font-sans);
   font-size: 11.5px;
   font-weight: 500;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
   box-shadow: var(--shadow-md);
   animation: lucien-msg-in 160ms var(--ease) both;
   pointer-events: none;

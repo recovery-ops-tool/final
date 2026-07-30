@@ -48,7 +48,7 @@ function doRefresh(rawRefreshToken: string): Promise<string> {
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30_000,
+  timeout: 180_000,
   headers: { 'Content-Type': 'application/json' },
 });
 

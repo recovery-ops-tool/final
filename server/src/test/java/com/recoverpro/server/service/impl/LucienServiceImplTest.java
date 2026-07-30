@@ -70,6 +70,8 @@ class LucienServiceImplTest {
     @Mock private ToolRegistry toolRegistry;
     @Mock private ConfirmationService confirmationService;
     @Mock private OrgIsolationGuard orgIsolationGuard;
+    @Mock private com.recoverpro.server.service.AllocationService allocationService;
+    @Mock private com.recoverpro.server.service.VisitInterviewContextService visitInterviewContextService;
 
     private LucienServiceImpl service;
     private UUID agentId;
@@ -81,7 +83,8 @@ class LucienServiceImplTest {
         service = new LucienServiceImpl(sessionRepository, messageRepository, inputSafetyFilter,
                 outputSafetyFilter, systemPromptBuilder, systemPromptService, agentContextService,
                 contextAssembler, dataSanitizer, chatRateLimiter, tokenBudgetService, agentLoop,
-                toolRegistry, confirmationService, orgIsolationGuard);
+                toolRegistry, confirmationService, orgIsolationGuard, allocationService,
+                visitInterviewContextService);
 
         agentId = UUID.randomUUID();
         User user = User.builder().id(agentId).organizationId(UUID.randomUUID()).build();

@@ -60,4 +60,11 @@ public class ConfirmationService {
         if (raw == null) return null;
         return (PendingAction) raw;
     }
+
+    /** Consumes (deletes) the pending action without executing it — used by
+     * VisitInterviewService after a successful or cancelled confirm-visit call, whose
+     * execution path bypasses resolve() (it needs to merge in server-verified args first). */
+    public void discard(String sessionId) {
+        redisTemplate.delete(REDIS_KEY_PREFIX + sessionId);
+    }
 }

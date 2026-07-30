@@ -35,6 +35,7 @@ import UnassignedCasesPage from './pages/UnassignedCasesPage';
 import DailyDispatchPage from './pages/DailyDispatchPage';
 import TodayVisitsPage from './pages/TodayVisitsPage';
 import VisitSubmitPage from './pages/VisitSubmitPage';
+import VisitInterviewPage from './pages/VisitInterviewPage';
 import UsersPage from './pages/UsersPage';
 import UserRequestsPage from './pages/UserRequestsPage';
 import OrganizationSettingsPage from './pages/OrganizationSettingsPage';
@@ -187,6 +188,7 @@ function App() {
                   <Route path="/app/ptps" element={<PtpsPage />} />
                   <Route path="/app/today" element={<TodayVisitsPage />} />
                   <Route path="/app/visits/:caseId/submit" element={<VisitSubmitPage />} />
+                  <Route path="/app/visits/:caseId/interview" element={<VisitInterviewPage />} />
                   <Route path="/app/reports" element={<ReportsPage />} />
                   <Route path="/app/audit" element={<AuditPage />} />
                   <Route path="/app/lucien" element={<LucienPage />} />
