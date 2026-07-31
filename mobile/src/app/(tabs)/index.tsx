@@ -171,38 +171,74 @@ export default function HomeScreen() {
           </Card>
         ) : null}
 
-        <Card style={{ gap: spacing.s4, shadowOpacity: 0, elevation: 0 }}>
+        <Card style={{ gap: spacing.s4, backgroundColor: '#FFFFFF', borderRadius: 20, padding: spacing.s4, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, borderWidth: 0 }}>
+          
           {/* Field Shift Section */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
-            <View style={{ flex: 1, gap: spacing.s1 }}>
+            {/* Themed Icon Container */}
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: shift ? '#E6F4EA' : '#F1F3F4', alignItems: 'center', justifyContent: 'center' }}>
+              <Radio size={20} color={shift ? '#137333' : '#5F6368'} />
+            </View>
+
+            <View style={{ flex: 1, gap: 2 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2 }}>
-                <Radio size={16} color={shift ? colors.success : colors.ink3} />
-                <Text variant="bodyMedium">Field shift</Text>
+                <Text variant="bodyMedium" style={{ fontWeight: '700', color: '#202124' }}>Field Shift</Text>
+                {shift ? (
+                  <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                    <Text style={{ color: '#137333', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Active</Text>
+                  </View>
+                ) : (
+                  <View style={{ backgroundColor: '#F1F3F4', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                    <Text style={{ color: '#5F6368', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Off</Text>
+                  </View>
+                )}
               </View>
               {shift ? (
-                <Text variant="caption" color="secondary">
+                <Text variant="caption" style={{ color: '#5F6368', fontSize: 12 }}>
                   Live — sharing location for {formatDurationSince(shift.startedAt)}
                 </Text>
               ) : null}
               {shiftError ? <Text variant="caption" color="error">{shiftError}</Text> : null}
             </View>
+            
             {shift ? (
-              <Button label="End shift" variant="outline" onPress={endShift} loading={ending} fullWidth={false} size="md" />
+              <Button label="End Shift" variant="outline" onPress={endShift} loading={ending} fullWidth={false} size="md" style={{ borderColor: '#DADCE0' }} />
             ) : (
-              <Button label="Start shift" onPress={startShift} loading={starting} fullWidth={false} size="md" />
+              <Button label="Start" onPress={startShift} loading={starting} fullWidth={false} size="md" style={{ backgroundColor: '#0AA550' }} />
             )}
           </View>
 
-          {/* Attendance Check-in Row underneath */}
+          {/* Thin subtle horizontal separator line */}
+          <View style={{ height: 1, backgroundColor: '#F1F3F4', marginVertical: 2 }} />
+
+          {/* Attendance Check-in Section */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
-            <View style={{ flex: 1, gap: spacing.s1 }}>
-              <Text variant="caption" color="secondary">
-                {checkedInAt ? `Checked in at ${formatTime(checkedInAt)}` : "You haven't checked in today"}
+            {/* Themed Icon Container */}
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: checkedInAt ? '#E8F0FE' : '#FCE8E6', alignItems: 'center', justifyContent: 'center' }}>
+              <MapPinCheck size={20} color={checkedInAt ? '#1A73E8' : '#D93025'} />
+            </View>
+
+            <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2 }}>
+                <Text variant="bodyMedium" style={{ fontWeight: '700', color: '#202124' }}>Daily Check-In</Text>
+                {checkedInAt ? (
+                  <View style={{ backgroundColor: '#E8F0FE', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                    <Text style={{ color: '#1A73E8', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Done</Text>
+                  </View>
+                ) : (
+                  <View style={{ backgroundColor: '#FCE8E6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                    <Text style={{ color: '#D93025', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Pending</Text>
+                  </View>
+                )}
+              </View>
+              <Text variant="caption" style={{ color: '#5F6368', fontSize: 12 }}>
+                {checkedInAt ? `Checked in at ${formatTime(checkedInAt)}` : 'You haven\'t checked in today'}
               </Text>
               {checkInError ? <Text variant="caption" color="error">{checkInError}</Text> : null}
             </View>
+
             {!checkedInAt ? (
-              <Button label="Check in" onPress={onCheckIn} loading={checkingIn} fullWidth={false} icon={<MapPinCheck size={16} color="#fff" />} size="md" />
+              <Button label="Check In" onPress={onCheckIn} loading={checkingIn} fullWidth={false} size="md" style={{ backgroundColor: '#1A73E8' }} />
             ) : null}
           </View>
         </Card>
