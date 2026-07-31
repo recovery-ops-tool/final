@@ -84,10 +84,10 @@ export default function LoginScreen() {
         <View style={{ gap: spacing.s6 }}>
           
           {/* Header/Branding section like web brand panel */}
-          <View style={{ alignItems: 'center', marginBottom: spacing.s4 }}>
+          <View style={{ alignItems: 'center', marginBottom: -spacing.s3 }}>
             <Image 
               source={require('../../../assets/images/logo.png')} 
-              style={{ width: 90, height: 90, resizeMode: 'contain' }} 
+              style={{ width: 120, height: 120, resizeMode: 'contain' }} 
             />
           </View>
 
