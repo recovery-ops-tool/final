@@ -84,24 +84,11 @@ export default function LoginScreen() {
         <View style={{ gap: spacing.s6 }}>
           
           {/* Header/Branding section like web brand panel */}
-          <View style={{ alignItems: 'center' }}>
+          <View style={{ alignItems: 'center', marginBottom: spacing.s4 }}>
             <Image 
               source={require('../../../assets/images/logo.png')} 
-              style={{ width: 90, height: 90, resizeMode: 'contain', marginBottom: spacing.s1 }} 
+              style={{ width: 90, height: 90, resizeMode: 'contain' }} 
             />
-            <Text variant="title" style={{ fontWeight: '700', marginBottom: spacing.s2 }}>RecoverPro Field</Text>
-            <View style={{
-              backgroundColor: colors.subtle,
-              paddingHorizontal: spacing.s3,
-              paddingVertical: spacing.s1,
-              borderRadius: radius.full,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}>
-              <Text variant="caption" color="secondary" style={{ fontSize: 11, fontWeight: '500' }}>
-                RBI-ALIGNED RECOVERY PLATFORM
-              </Text>
-            </View>
           </View>
 
           {stage === 'credentials' ? (
