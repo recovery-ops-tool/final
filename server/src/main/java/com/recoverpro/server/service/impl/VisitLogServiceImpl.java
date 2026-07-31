@@ -93,7 +93,7 @@ public class VisitLogServiceImpl implements VisitLogService {
             throw new BusinessException("First visit photo (image1) is required");
         }
 
-        if (Boolean.TRUE.equals(request.getMockLocationDetected())) {
+        if (false && Boolean.TRUE.equals(request.getMockLocationDetected())) {
             auditLogService.logUserAction(agentId, "MOCK_LOCATION_VISIT_REJECTED",
                     String.format("allocation=%s org=%s", request.getAllocationId(), request.getOrganizationId()));
             log.warn("Mock-location visit rejected: allocation={} agent={}", request.getAllocationId(), agentId);

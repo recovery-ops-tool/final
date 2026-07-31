@@ -1,5 +1,6 @@
 package com.recoverpro.server.lucien.agent;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recoverpro.server.lucien.tool.ToolExecutor;
 import com.recoverpro.server.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,15 @@ public class ConfirmationService {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final ToolExecutor toolExecutor;
+    private final ObjectMapper objectMapper;
+
+    private PendingAction castOrConvert(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof PendingAction) {
+            return (PendingAction) raw;
+        }
+        return objectMapper.convertValue(raw, PendingAction.class);
+    }
 
     /**
      * Confirm or cancel a pending write action.
@@ -35,7 +45,7 @@ public class ConfirmationService {
                     "No pending action for session " + sessionId + " — it may have timed out. Please retry.");
         }
 
-        PendingAction action = (PendingAction) raw;
+        PendingAction action = castOrConvert(raw);
 
         if (!confirmed) {
             redisTemplate.delete(key);
@@ -57,8 +67,7 @@ public class ConfirmationService {
     /** Returns the pending action summary without consuming it. */
     public PendingAction peek(String sessionId) {
         Object raw = redisTemplate.opsForValue().get(REDIS_KEY_PREFIX + sessionId);
-        if (raw == null) return null;
-        return (PendingAction) raw;
+        return castOrConvert(raw);
     }
 
     /** Consumes (deletes) the pending action without executing it — used by
