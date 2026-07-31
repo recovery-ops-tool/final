@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { CalendarCheck, IndianRupee, Handshake, MapPinCheck, CloudOff, RefreshCw, Radio } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
@@ -99,6 +100,7 @@ export default function HomeScreen() {
 
   return (
     <Screen onRefresh={onRefresh} refreshing={refreshing} padded={false} edges={['top']}>
+      <StatusBar style="light" backgroundColor="#0AA550" />
       {/* Top Banner section with green background */}
       <View style={{ backgroundColor: '#0AA550', paddingHorizontal: spacing.s4, paddingTop: spacing.s4, paddingBottom: spacing.s5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
         <View style={{ marginBottom: spacing.s4 }}>
@@ -132,9 +134,11 @@ export default function HomeScreen() {
                 <Radio size={16} color={shift ? colors.success : colors.ink3} />
                 <Text variant="bodyMedium">Field shift</Text>
               </View>
-              <Text variant="caption" color="secondary">
-                {shift ? `Live — sharing location for ${formatDurationSince(shift.startedAt)}` : 'Start a shift so your team can see you\'re in the field'}
-              </Text>
+              {shift ? (
+                <Text variant="caption" color="secondary">
+                  Live — sharing location for {formatDurationSince(shift.startedAt)}
+                </Text>
+              ) : null}
               {shiftError ? <Text variant="caption" color="error">{shiftError}</Text> : null}
             </View>
             {shift ? (
