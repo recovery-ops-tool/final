@@ -107,6 +107,7 @@ export default function HomeScreen() {
       {/* Top Banner section with pastel double shade gradient extending under status bar */}
       <LinearGradient
         colors={['#A7F3D0', '#0AA550']}
+        locations={[0.0, 0.4]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={{ paddingHorizontal: spacing.s4, paddingTop: insets.top + spacing.s4, paddingBottom: spacing.s5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}
