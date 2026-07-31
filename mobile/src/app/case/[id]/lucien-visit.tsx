@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { View, ScrollView, KeyboardAvoidingView, Platform, StyleSheet, Pressable } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, Stack } from 'expo-router';
 import { MapPin, RefreshCw, ChevronDown, ChevronUp, Send, Check, X, ShieldAlert, Sparkles, ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '@/theme/useTheme';
 import { Screen, Text, Button, Card, TextField, Divider, LoadingView, EmptyState, Badge } from '@/components/ui';
@@ -263,6 +263,7 @@ export default function LucienVisitScreen() {
 
   return (
     <Screen scroll={false} padded={false}>
+      <Stack.Screen options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <View style={{ flex: 1, backgroundColor: colors.canvas }}>
         
         {/* Custom Header */}
