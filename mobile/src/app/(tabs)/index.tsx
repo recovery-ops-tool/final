@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { CalendarCheck, IndianRupee, Handshake, MapPinCheck, CloudOff, RefreshCw, Radio } from 'lucide-react-native';
@@ -102,12 +103,17 @@ export default function HomeScreen() {
 
   return (
     <Screen onRefresh={onRefresh} refreshing={refreshing} padded={false} edges={['left', 'right']}>
-      <StatusBar style="light" backgroundColor="#0AA550" />
-      {/* Top Banner section with green background extending under status bar */}
-      <View style={{ backgroundColor: '#0AA550', paddingHorizontal: spacing.s4, paddingTop: insets.top + spacing.s4, paddingBottom: spacing.s5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
+      <StatusBar style="dark" backgroundColor="#A7F3D0" />
+      {/* Top Banner section with pastel double shade gradient extending under status bar */}
+      <LinearGradient
+        colors={['#A7F3D0', '#34D399']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ paddingHorizontal: spacing.s4, paddingTop: insets.top + spacing.s4, paddingBottom: spacing.s5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}
+      >
         <View style={{ marginBottom: spacing.s4 }}>
-          <Text variant="caption" style={{ color: '#E8F5E9' }}>Welcome back</Text>
-          <Text variant="title" style={{ color: '#FFFFFF', fontWeight: 'bold' }}>{user?.firstName ?? 'Field Officer'}</Text>
+          <Text variant="caption" style={{ color: '#065F46', fontWeight: '500' }}>Welcome back</Text>
+          <Text variant="title" style={{ color: '#065F46', fontWeight: 'bold' }}>{user?.firstName ?? 'Field Officer'}</Text>
         </View>
 
         {pending > 0 ? (
@@ -163,7 +169,7 @@ export default function HomeScreen() {
             ) : null}
           </View>
         </Card>
-      </View>
+      </LinearGradient>
 
       {/* Main body content below the green header */}
       <View style={{ padding: spacing.s4, gap: spacing.s5 }}>
