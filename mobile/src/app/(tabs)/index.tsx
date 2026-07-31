@@ -124,22 +124,6 @@ export default function HomeScreen() {
         ) : null}
 
         <Card style={{ gap: spacing.s4 }}>
-          {/* Attendance Section */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
-            <View style={{ flex: 1, gap: spacing.s1 }}>
-              <Text variant="bodyMedium">Attendance</Text>
-              <Text variant="caption" color="secondary">
-                {checkedInAt ? `Checked in at ${formatTime(checkedInAt)}` : "You haven't checked in today"}
-              </Text>
-              {checkInError ? <Text variant="caption" color="error">{checkInError}</Text> : null}
-            </View>
-            {!checkedInAt ? (
-              <Button label="Check in" onPress={onCheckIn} loading={checkingIn} fullWidth={false} icon={<MapPinCheck size={16} color="#fff" />} />
-            ) : null}
-          </View>
-
-          <Divider />
-
           {/* Field Shift Section */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
             <View style={{ flex: 1, gap: spacing.s1 }}>
@@ -157,6 +141,19 @@ export default function HomeScreen() {
             ) : (
               <Button label="Start shift" onPress={startShift} loading={starting} fullWidth={false} size="md" />
             )}
+          </View>
+
+          {/* Attendance Check-in Row underneath */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3, paddingLeft: spacing.s5 }}>
+            <View style={{ flex: 1, gap: spacing.s1 }}>
+              <Text variant="caption" color="secondary">
+                {checkedInAt ? `Checked in at ${formatTime(checkedInAt)}` : "You haven't checked in today"}
+              </Text>
+              {checkInError ? <Text variant="caption" color="error">{checkInError}</Text> : null}
+            </View>
+            {!checkedInAt ? (
+              <Button label="Check in" onPress={onCheckIn} loading={checkingIn} fullWidth={false} icon={<MapPinCheck size={16} color="#fff" />} size="md" />
+            ) : null}
           </View>
         </Card>
 
