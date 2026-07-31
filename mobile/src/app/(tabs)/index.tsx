@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { View, Image } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -111,6 +111,14 @@ export default function HomeScreen() {
         end={{ x: 0, y: 1 }}
         style={{ paddingHorizontal: spacing.s4, paddingTop: insets.top + spacing.s4, paddingBottom: spacing.s5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}
       >
+        {/* Logo at the top of home screen */}
+        <View style={{ marginBottom: spacing.s3 }}>
+          <Image 
+            source={require('../../../assets/images/logo.png')} 
+            style={{ width: 120, height: 32, resizeMode: 'contain' }} 
+          />
+        </View>
+
         <View style={{ marginBottom: spacing.s4 }}>
           <Text variant="caption" style={{ color: '#065F46', fontWeight: '500' }}>Welcome back</Text>
           <Text variant="title" style={{ color: '#065F46', fontWeight: 'bold' }}>{user?.firstName ?? 'Field Officer'}</Text>
