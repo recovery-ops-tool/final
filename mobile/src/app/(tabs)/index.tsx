@@ -115,7 +115,7 @@ export default function HomeScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.s3 }}>
           <Image 
             source={require('../../../assets/images/logo.png')} 
-            style={{ width: 120, height: 32, resizeMode: 'contain' }} 
+            style={{ width: 120, height: 32, resizeMode: 'contain', marginLeft: -spacing.s3 }} 
           />
           
           {/* Circular Avatar */}
