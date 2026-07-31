@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform, StyleSheet, Pressable } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform, StyleSheet, Pressable, Image } from 'react-native';
 import { router, useLocalSearchParams, Stack } from 'expo-router';
 import { MapPin, RefreshCw, ChevronDown, ChevronUp, Send, Check, X, ShieldAlert, Sparkles, ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '@/theme/useTheme';
@@ -367,11 +367,18 @@ export default function LucienVisitScreen() {
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.length === 0 ? (
-            <EmptyState
-              icon={Sparkles}
-              title="Lucien Visit Interview"
-              message="Lucien will act as your manager. Tell Lucien what's happening at the door to coach you through the visit and submit it."
-            />
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.s8, gap: spacing.s3 }}>
+              <Image 
+                source={require('../../../../assets/images/lucien-logo.png')} 
+                style={{ width: 80, height: 80, resizeMode: 'contain', marginBottom: spacing.s2 }} 
+              />
+              <Text variant="headline" style={{ textAlign: 'center', fontSize: 18, fontWeight: '600', color: colors.ink1 }}>
+                Lucien Visit Interview
+              </Text>
+              <Text variant="caption" color="secondary" style={{ textAlign: 'center', maxWidth: 260 }}>
+                Lucien will act as your manager. Tell Lucien what's happening at the door to coach you through the visit and submit it.
+              </Text>
+            </View>
           ) : (
             messages.map((m) => {
               const isUser = m.role === 'USER';
