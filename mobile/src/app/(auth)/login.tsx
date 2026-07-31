@@ -87,7 +87,7 @@ export default function LoginScreen() {
           <View style={{ alignItems: 'center', gap: spacing.s3 }}>
             <Image 
               source={require('../../../assets/images/logo.png')} 
-              style={{ width: 64, height: 64, resizeMode: 'contain' }} 
+              style={{ width: 90, height: 90, resizeMode: 'contain' }} 
             />
             <Text variant="title" style={{ fontWeight: '700' }}>RecoverPro Field</Text>
             <View style={{
