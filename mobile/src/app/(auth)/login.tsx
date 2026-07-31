@@ -92,7 +92,7 @@ export default function LoginScreen() {
           </View>
 
           {stage === 'credentials' ? (
-            <Card style={{ gap: spacing.s4 }}>
+            <Card style={{ gap: spacing.s4, shadowOpacity: 0, elevation: 0 }}>
               <View style={{ gap: spacing.s1 }}>
                 <Text variant="headline" style={{ fontSize: 18, fontWeight: '600' }}>Welcome back</Text>
                 <Text variant="caption" color="secondary">
@@ -161,7 +161,7 @@ export default function LoginScreen() {
             </Card>
           ) : (
             /* MFA Stage */
-            <Card style={{ gap: spacing.s4 }}>
+            <Card style={{ gap: spacing.s4, shadowOpacity: 0, elevation: 0 }}>
               <View style={{ gap: spacing.s1 }}>
                 <Text variant="headline" style={{ fontSize: 18, fontWeight: '600' }}>Two-factor authentication</Text>
                 <Text variant="caption" color="secondary">
