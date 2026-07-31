@@ -98,15 +98,16 @@ export default function HomeScreen() {
   if (loading) return <LoadingView label="Loading your day…" />;
 
   return (
-    <Screen onRefresh={onRefresh} refreshing={refreshing}>
-      <View style={{ gap: spacing.s5 }}>
-        <View>
-          <Text variant="caption" color="secondary">Welcome back</Text>
-          <Text variant="title">{user?.firstName ?? 'Field Officer'}</Text>
+    <Screen onRefresh={onRefresh} refreshing={refreshing} padded={false} edges={['top']}>
+      {/* Top Banner section with green background */}
+      <View style={{ backgroundColor: '#0AA550', paddingHorizontal: spacing.s4, paddingTop: spacing.s4, paddingBottom: spacing.s5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
+        <View style={{ marginBottom: spacing.s4 }}>
+          <Text variant="caption" style={{ color: '#E8F5E9' }}>Welcome back</Text>
+          <Text variant="title" style={{ color: '#FFFFFF', fontWeight: 'bold' }}>{user?.firstName ?? 'Field Officer'}</Text>
         </View>
 
         {pending > 0 ? (
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3, marginBottom: spacing.s4, backgroundColor: '#FFFFFF', borderWidth: 0, shadowOpacity: 0.05 }}>
             <CloudOff size={18} color={colors.warnBorder} />
             <Text variant="caption" color="secondary" style={{ flex: 1 }}>
               {pending} {pending === 1 ? 'item' : 'items'} waiting to sync
@@ -123,7 +124,7 @@ export default function HomeScreen() {
           </Card>
         ) : null}
 
-        <Card style={{ gap: spacing.s4 }}>
+        <Card style={{ gap: spacing.s4, shadowOpacity: 0, elevation: 0 }}>
           {/* Field Shift Section */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
             <View style={{ flex: 1, gap: spacing.s1 }}>
@@ -156,7 +157,10 @@ export default function HomeScreen() {
             ) : null}
           </View>
         </Card>
+      </View>
 
+      {/* Main body content below the green header */}
+      <View style={{ padding: spacing.s4, gap: spacing.s5 }}>
         <View style={{ flexDirection: 'row', gap: spacing.s3 }}>
           <StatCard icon={IndianRupee} label="Collected today" value={dashboard ? formatCurrency(dashboard.collectedAmountToday) : '—'} tone="success" />
           <StatCard icon={Handshake} label="PTPs due today" value={dashboard ? String(dashboard.ptpsDueToday) : '—'} tone="warning" />
