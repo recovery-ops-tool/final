@@ -92,79 +92,83 @@ export default function LoginScreen() {
           </View>
 
           {stage === 'credentials' ? (
-            <Card style={{ gap: spacing.s4, shadowOpacity: 0, elevation: 0 }}>
-              <View style={{ gap: spacing.s1 }}>
-                <Text variant="headline" style={{ fontSize: 18, fontWeight: '600' }}>Welcome back</Text>
-                <Text variant="caption" color="secondary">
+            <View style={{ gap: spacing.s4 }}>
+              {/* Header outside the card */}
+              <View style={{ gap: spacing.s1, paddingHorizontal: spacing.s2 }}>
+                <Text variant="headline" style={{ fontSize: 20, fontWeight: '700', color: colors.ink1 }}>Welcome back</Text>
+                <Text variant="body" color="secondary" style={{ fontSize: 14 }}>
                   Sign in to access your organisation's recovery workspace.
                 </Text>
               </View>
 
-              <TextField
-                label="Email"
-                required
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@company.com"
-              />
-
-              <View style={{ position: 'relative' }}>
+              <Card style={{ gap: spacing.s4, shadowOpacity: 0, elevation: 0 }}>
                 <TextField
-                  label="Password"
+                  label="Email"
                   required
-                  secureTextEntry={!showPassword}
-                  autoComplete="password"
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="••••••••"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@company.com"
                 />
-                <Pressable
-                  onPress={() => setShowPassword(p => !p)}
-                  style={{
-                    position: 'absolute',
-                    right: spacing.s3,
-                    top: 36,
-                    padding: spacing.s1,
-                  }}
-                >
-                  {showPassword ? (
-                    <EyeOff size={18} color={colors.ink3} />
-                  ) : (
-                    <Eye size={18} color={colors.ink3} />
-                  )}
-                </Pressable>
-              </View>
 
-              {error ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2, marginTop: spacing.s1 }}>
-                  <AlertCircle size={14} color={colors.error} />
-                  <Text variant="caption" color="error" style={{ flex: 1 }}>{error}</Text>
+                <View style={{ position: 'relative' }}>
+                  <TextField
+                    label="Password"
+                    required
+                    secureTextEntry={!showPassword}
+                    autoComplete="password"
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="••••••••"
+                  />
+                  <Pressable
+                    onPress={() => setShowPassword(p => !p)}
+                    style={{
+                      position: 'absolute',
+                      right: spacing.s3,
+                      top: 36,
+                      padding: spacing.s1,
+                    }}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={18} color={colors.ink3} />
+                    ) : (
+                      <Eye size={18} color={colors.ink3} />
+                    )}
+                  </Pressable>
                 </View>
-              ) : null}
 
-              <Button 
-                label="Sign in" 
-                onPress={onSubmit} 
-                loading={submitting} 
-              />
+                {error ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2, marginTop: spacing.s1 }}>
+                    <AlertCircle size={14} color={colors.error} />
+                    <Text variant="caption" color="error" style={{ flex: 1 }}>{error}</Text>
+                  </View>
+                ) : null}
 
-              <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: spacing.s1 }}>
-                <Pressable onPress={handleForgotPassword}>
-                  <Text variant="caption" style={{ color: colors.accent, fontWeight: '500' }}>
-                    Forgot password?
-                  </Text>
-                </Pressable>
-              </View>
-            </Card>
+                <Button 
+                  label="Sign in" 
+                  onPress={onSubmit} 
+                  loading={submitting} 
+                />
+
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: spacing.s1 }}>
+                  <Pressable onPress={handleForgotPassword}>
+                    <Text variant="caption" style={{ color: colors.accent, fontWeight: '500' }}>
+                      Forgot password?
+                    </Text>
+                  </Pressable>
+                </View>
+              </Card>
+            </View>
           ) : (
             /* MFA Stage */
-            <Card style={{ gap: spacing.s4, shadowOpacity: 0, elevation: 0 }}>
-              <View style={{ gap: spacing.s1 }}>
-                <Text variant="headline" style={{ fontSize: 18, fontWeight: '600' }}>Two-factor authentication</Text>
-                <Text variant="caption" color="secondary">
+            <View style={{ gap: spacing.s4 }}>
+              {/* Header outside the card */}
+              <View style={{ gap: spacing.s1, paddingHorizontal: spacing.s2 }}>
+                <Text variant="headline" style={{ fontSize: 20, fontWeight: '700', color: colors.ink1 }}>Two-factor authentication</Text>
+                <Text variant="body" color="secondary" style={{ fontSize: 14 }}>
                   {useRecoveryCode 
                     ? 'Enter an emergency recovery code to bypass authenticator verification.' 
                     : 'Enter the 6-digit code from your authenticator app.'
@@ -172,67 +176,69 @@ export default function LoginScreen() {
                 </Text>
               </View>
 
-              {useRecoveryCode ? (
-                <TextField
-                  label="Emergency recovery code"
-                  required
-                  autoCapitalize="none"
-                  value={recoveryCode}
-                  onChangeText={setRecoveryCode}
-                  placeholder="Enter recovery code"
-                  autoFocus
-                />
-              ) : (
-                <TextField
-                  label="Authentication code"
-                  required
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  value={totpCode}
-                  onChangeText={setTotpCode}
-                  placeholder="123456"
-                  autoFocus
-                />
-              )}
+              <Card style={{ gap: spacing.s4, shadowOpacity: 0, elevation: 0 }}>
+                {useRecoveryCode ? (
+                  <TextField
+                    label="Emergency recovery code"
+                    required
+                    autoCapitalize="none"
+                    value={recoveryCode}
+                    onChangeText={setRecoveryCode}
+                    placeholder="Enter recovery code"
+                    autoFocus
+                  />
+                ) : (
+                  <TextField
+                    label="Authentication code"
+                    required
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    value={totpCode}
+                    onChangeText={setTotpCode}
+                    placeholder="123456"
+                    autoFocus
+                  />
+                )}
 
-              {error ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2, marginTop: spacing.s1 }}>
-                  <AlertCircle size={14} color={colors.error} />
-                  <Text variant="caption" color="error" style={{ flex: 1 }}>{error}</Text>
+                {error ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2, marginTop: spacing.s1 }}>
+                    <AlertCircle size={14} color={colors.error} />
+                    <Text variant="caption" color="error" style={{ flex: 1 }}>{error}</Text>
+                  </View>
+                ) : null}
+
+                <Button 
+                  label="Verify & sign in" 
+                  onPress={onSubmit} 
+                  loading={submitting} 
+                />
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.s1 }}>
+                  <Pressable onPress={() => {
+                    setUseRecoveryCode(prev => !prev);
+                    setError(null);
+                    setTotpCode('');
+                    setRecoveryCode('');
+                  }}>
+                    <Text variant="caption" style={{ color: colors.accent, fontWeight: '500' }}>
+                      {useRecoveryCode ? 'Use authenticator code' : 'Use emergency recovery code'}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable onPress={() => {
+                    setStage('credentials');
+                    setError(null);
+                    setTotpCode('');
+                    setRecoveryCode('');
+                    setUseRecoveryCode(false);
+                  }}>
+                    <Text variant="caption" style={{ color: colors.ink3, fontWeight: '500' }}>
+                      Back to sign in
+                    </Text>
+                  </Pressable>
                 </View>
-              ) : null}
-
-              <Button 
-                label="Verify & sign in" 
-                onPress={onSubmit} 
-                loading={submitting} 
-              />
-
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.s1 }}>
-                <Pressable onPress={() => {
-                  setUseRecoveryCode(prev => !prev);
-                  setError(null);
-                  setTotpCode('');
-                  setRecoveryCode('');
-                }}>
-                  <Text variant="caption" style={{ color: colors.accent, fontWeight: '500' }}>
-                    {useRecoveryCode ? 'Use authenticator code' : 'Use emergency recovery code'}
-                  </Text>
-                </Pressable>
-
-                <Pressable onPress={() => {
-                  setStage('credentials');
-                  setError(null);
-                  setTotpCode('');
-                  setRecoveryCode('');
-                  setUseRecoveryCode(false);
-                }}>
-                  <Text variant="caption" style={{ color: colors.ink3, fontWeight: '500' }}>
-                    Back to sign in
-                  </Text>
-                </Pressable>
-              </View>
-            </Card>
+              </Card>
+            </View>
           )}
 
           {/* Footer Area with Access request and legal info like web form footer */}
