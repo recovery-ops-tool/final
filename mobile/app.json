@@ -48,7 +48,7 @@
         {
           "backgroundColor": "#0AA550",
           "image": "./assets/images/log.png",
-          "imageWidth": 76
+          "imageWidth": 200
         }
       ],
       "expo-secure-store",
