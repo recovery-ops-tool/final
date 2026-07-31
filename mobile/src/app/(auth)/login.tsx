@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Pressable, ScrollView, Alert } from 'react-native';
+import { View, Pressable, ScrollView, Alert, Image } from 'react-native';
 import { ShieldCheck, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/theme/useTheme';
@@ -85,13 +85,10 @@ export default function LoginScreen() {
           
           {/* Header/Branding section like web brand panel */}
           <View style={{ alignItems: 'center', gap: spacing.s3 }}>
-            <View style={{
-              width: 64, height: 64, borderRadius: 20, backgroundColor: colors.accentSubtle,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-            >
-              <ShieldCheck size={30} color={colors.accent} />
-            </View>
+            <Image 
+              source={require('../../../assets/images/logo.png')} 
+              style={{ width: 64, height: 64, resizeMode: 'contain' }} 
+            />
             <Text variant="title" style={{ fontWeight: '700' }}>RecoverPro Field</Text>
             <View style={{
               backgroundColor: colors.subtle,
