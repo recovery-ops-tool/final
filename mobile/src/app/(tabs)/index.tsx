@@ -144,7 +144,7 @@ export default function HomeScreen() {
           </View>
 
           {/* Attendance Check-in Row underneath */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3, paddingLeft: spacing.s5 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
             <View style={{ flex: 1, gap: spacing.s1 }}>
               <Text variant="caption" color="secondary">
                 {checkedInAt ? `Checked in at ${formatTime(checkedInAt)}` : "You haven't checked in today"}
