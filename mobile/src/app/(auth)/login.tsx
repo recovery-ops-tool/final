@@ -84,12 +84,12 @@ export default function LoginScreen() {
         <View style={{ gap: spacing.s6 }}>
           
           {/* Header/Branding section like web brand panel */}
-          <View style={{ alignItems: 'center', gap: spacing.s3 }}>
+          <View style={{ alignItems: 'center' }}>
             <Image 
               source={require('../../../assets/images/logo.png')} 
-              style={{ width: 90, height: 90, resizeMode: 'contain' }} 
+              style={{ width: 90, height: 90, resizeMode: 'contain', marginBottom: spacing.s1 }} 
             />
-            <Text variant="title" style={{ fontWeight: '700' }}>RecoverPro Field</Text>
+            <Text variant="title" style={{ fontWeight: '700', marginBottom: spacing.s2 }}>RecoverPro Field</Text>
             <View style={{
               backgroundColor: colors.subtle,
               paddingHorizontal: spacing.s3,
