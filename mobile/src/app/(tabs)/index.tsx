@@ -111,12 +111,32 @@ export default function HomeScreen() {
         end={{ x: 0, y: 1 }}
         style={{ paddingHorizontal: spacing.s4, paddingTop: insets.top + spacing.s4, paddingBottom: spacing.s5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}
       >
-        {/* Logo at the top of home screen */}
-        <View style={{ marginBottom: spacing.s3 }}>
+        {/* Header row: Logo on the left, Avatar on the right */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.s3 }}>
           <Image 
             source={require('../../../assets/images/logo.png')} 
             style={{ width: 120, height: 32, resizeMode: 'contain' }} 
           />
+          
+          {/* Circular Avatar */}
+          <View style={{ 
+            width: 36, 
+            height: 36, 
+            borderRadius: 18, 
+            backgroundColor: '#065F46', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: '#A7F3D0'
+          }}>
+            <Text style={{ 
+              color: '#FFFFFF', 
+              fontSize: 14, 
+              fontWeight: 'bold' 
+            }}>
+              {(user?.firstName?.[0] ?? 'F') + (user?.lastName?.[0] ?? 'O')}
+            </Text>
+          </View>
         </View>
 
         <View style={{ marginBottom: spacing.s4 }}>
