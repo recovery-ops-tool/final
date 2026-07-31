@@ -70,7 +70,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(auth.accessToken);
     await saveRefreshToken(auth.refreshToken);
     await saveUserCache(auth.user);
+    
+    // Show splash loading transition
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
     setUser(auth.user);
+    setIsLoading(false);
     return { mfaRequired: false };
   };
 
