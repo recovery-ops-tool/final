@@ -125,7 +125,7 @@ export default function CaseDetailScreen() {
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s3 }}>
           <Button
-            label="Lucien visit guide"
+            label="Visit log"
             fullWidth={false}
             onPress={() => router.push({ pathname: '/case/[id]/lucien-visit', params: { id } })}
             icon={<MessageSquare size={16} color="#fff" />}

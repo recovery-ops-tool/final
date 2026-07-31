@@ -290,7 +290,7 @@ export default function LucienVisitScreen() {
             <ArrowLeft size={20} color={colors.ink1} />
           </Pressable>
           <Text variant="headline" style={{ fontSize: 16, fontWeight: '600', color: colors.ink1 }}>
-            Visit Interview
+            Visit log
           </Text>
           <View style={{ width: 24 }} />
         </View>
