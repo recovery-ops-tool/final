@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { CalendarCheck, IndianRupee, Handshake, MapPinCheck, CloudOff, RefreshCw, Radio } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/theme/useTheme';
 import { Screen, Text, Button, Card, StatCard, EmptyState, LoadingView, Divider } from '@/components/ui';
@@ -23,6 +24,7 @@ import type { AllocationResponse, FieldAgentDashboardResponse } from '@/types/do
 export default function HomeScreen() {
   const { user } = useAuth();
   const { colors, spacing } = useTheme();
+  const insets = useSafeAreaInsets();
   const { pending, syncing } = useOfflineSync();
   const { shift, starting, ending, error: shiftError, startShift, endShift } = useShiftTracking();
   const [, forceTick] = useState(0);
@@ -99,10 +101,10 @@ export default function HomeScreen() {
   if (loading) return <LoadingView label="Loading your day…" />;
 
   return (
-    <Screen onRefresh={onRefresh} refreshing={refreshing} padded={false} edges={['top']}>
+    <Screen onRefresh={onRefresh} refreshing={refreshing} padded={false} edges={['left', 'right']}>
       <StatusBar style="light" backgroundColor="#0AA550" />
-      {/* Top Banner section with green background */}
-      <View style={{ backgroundColor: '#0AA550', paddingHorizontal: spacing.s4, paddingTop: spacing.s4, paddingBottom: spacing.s5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
+      {/* Top Banner section with green background extending under status bar */}
+      <View style={{ backgroundColor: '#0AA550', paddingHorizontal: spacing.s4, paddingTop: insets.top + spacing.s4, paddingBottom: spacing.s5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
         <View style={{ marginBottom: spacing.s4 }}>
           <Text variant="caption" style={{ color: '#E8F5E9' }}>Welcome back</Text>
           <Text variant="title" style={{ color: '#FFFFFF', fontWeight: 'bold' }}>{user?.firstName ?? 'Field Officer'}</Text>
