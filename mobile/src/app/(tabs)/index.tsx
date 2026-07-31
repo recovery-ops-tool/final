@@ -180,9 +180,10 @@ export default function HomeScreen() {
               <Radio size={20} color={shift ? '#137333' : '#5F6368'} />
             </View>
 
-            <View style={{ flex: 1, gap: 2 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2 }}>
-                <Text variant="bodyMedium" style={{ fontWeight: '700', color: '#202124' }}>Field Shift</Text>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text variant="bodyMedium" style={{ fontWeight: '700', color: '#202124' }}>Field Shift</Text>
+              
+              <View style={{ flexDirection: 'row' }}>
                 {shift ? (
                   <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
                     <Text style={{ color: '#137333', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Active</Text>
@@ -193,11 +194,6 @@ export default function HomeScreen() {
                   </View>
                 )}
               </View>
-              {shift ? (
-                <Text variant="caption" style={{ color: '#5F6368', fontSize: 12 }}>
-                  Live — sharing location for {formatDurationSince(shift.startedAt)}
-                </Text>
-              ) : null}
               {shiftError ? <Text variant="caption" color="error">{shiftError}</Text> : null}
             </View>
             
