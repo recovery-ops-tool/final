@@ -291,7 +291,7 @@ export default function LucienVisitScreen() {
           <Text variant="headline" style={{ fontSize: 16, fontWeight: '600', color: colors.ink1 }}>
             Visit Interview
           </Text>
-          <View style={{ width: 24 }} /> {/* Spacer to center the title */}
+          <View style={{ width: 24 }} />
         </View>
         
         {/* Verification requirements card (collapsible) */}
