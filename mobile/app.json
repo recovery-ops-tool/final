@@ -11,7 +11,7 @@
       "policy": "fingerprint"
     },
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.recoverpro.field",
       "infoPlist": {
