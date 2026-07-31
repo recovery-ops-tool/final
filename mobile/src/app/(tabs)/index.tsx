@@ -141,7 +141,16 @@ export default function HomeScreen() {
 
         <View style={{ marginBottom: spacing.s4 }}>
           <Text variant="caption" style={{ color: '#065F46', fontWeight: '500' }}>Welcome back</Text>
-          <Text variant="title" style={{ color: '#065F46', fontWeight: 'bold' }}>{user?.firstName ?? 'Field Officer'}</Text>
+          <Text 
+            variant="title" 
+            style={{ 
+              color: '#065F46', 
+              fontFamily: 'Inter_700Bold', 
+              letterSpacing: 1.5 
+            }}
+          >
+            {user?.firstName ?? 'Field Officer'}
+          </Text>
         </View>
 
         {pending > 0 ? (
