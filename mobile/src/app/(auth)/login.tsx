@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Pressable, ScrollView, Alert, Image } from 'react-native';
+import { router } from 'expo-router';
 import { ShieldCheck, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/theme/useTheme';
@@ -63,11 +64,7 @@ export default function LoginScreen() {
   };
 
   const handleForgotPassword = () => {
-    Alert.alert(
-      'Forgot Password?',
-      'Please contact your system administrator or support team at support@recoverpro.com to reset your credentials.',
-      [{ text: 'OK' }]
-    );
+    router.push('/(auth)/forgot-password');
   };
 
   const handleRequestAccess = () => {

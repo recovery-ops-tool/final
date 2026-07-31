@@ -72,6 +72,7 @@ function RootNavigator() {
 
         <Stack.Protected guard={!isAuthenticated}>
           <Stack.Screen name="(auth)/login" />
+          <Stack.Screen name="(auth)/forgot-password" />
         </Stack.Protected>
       </Stack>
       {isAuthenticated ? <SosFloatingButton /> : null}
