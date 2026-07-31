@@ -373,7 +373,7 @@ export default function LucienVisitScreen() {
                 style={{ width: 80, height: 80, resizeMode: 'contain', marginBottom: spacing.s2 }} 
               />
               <Text variant="headline" style={{ textAlign: 'center', fontSize: 18, fontWeight: '600', color: colors.ink1 }}>
-                Lucien Visit Interview
+                Lucien Visit Log
               </Text>
               <Text variant="caption" color="secondary" style={{ textAlign: 'center', maxWidth: 260 }}>
                 Lucien will act as your manager. Tell Lucien what's happening at the door to coach you through the visit and submit it.
