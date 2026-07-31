@@ -5,7 +5,7 @@ import * as Location from 'expo-location';
 import { CalendarCheck, IndianRupee, Handshake, MapPinCheck, CloudOff, RefreshCw, Radio } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/theme/useTheme';
-import { Screen, Text, Button, Card, StatCard, EmptyState, LoadingView } from '@/components/ui';
+import { Screen, Text, Button, Card, StatCard, EmptyState, LoadingView, Divider } from '@/components/ui';
 import { CaseRow } from '@/components/CaseRow';
 import { dailyDispatchApi } from '@/api/dailyDispatchApi';
 import { allocationsApi } from '@/api/allocationsApi';
@@ -123,7 +123,8 @@ export default function HomeScreen() {
           </Card>
         ) : null}
 
-        <Card>
+        <Card style={{ gap: spacing.s4 }}>
+          {/* Attendance Section */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
             <View style={{ flex: 1, gap: spacing.s1 }}>
               <Text variant="bodyMedium">Attendance</Text>
@@ -136,9 +137,10 @@ export default function HomeScreen() {
               <Button label="Check in" onPress={onCheckIn} loading={checkingIn} fullWidth={false} icon={<MapPinCheck size={16} color="#fff" />} />
             ) : null}
           </View>
-        </Card>
 
-        <Card>
+          <Divider />
+
+          {/* Field Shift Section */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
             <View style={{ flex: 1, gap: spacing.s1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2 }}>
