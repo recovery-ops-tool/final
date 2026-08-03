@@ -131,12 +131,6 @@ export default function CaseDetailScreen() {
             icon={<MessageSquare size={16} color="#fff" />}
           />
           <Button
-            label="Log a visit"
-            fullWidth={false}
-            onPress={() => router.push({ pathname: '/case/[id]/visit', params: { id } })}
-            icon={<MapPin size={16} color="#fff" />}
-          />
-          <Button
             label="Create PTP"
             fullWidth={false}
             variant="secondary"

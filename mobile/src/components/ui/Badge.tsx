@@ -27,12 +27,12 @@ export function Badge({ label, tone = 'neutral' }: BadgeProps) {
       style={{
         backgroundColor: t.bg,
         borderRadius: radius.pill,
-        paddingHorizontal: spacing.s3,
-        paddingVertical: spacing.s1 + 2,
+        paddingHorizontal: spacing.s1 + 2,
+        paddingVertical: 2,
         alignSelf: 'flex-start',
       }}
     >
-      <Text variant="eyebrow" style={{ color: t.text }}>{label}</Text>
+      <Text variant="eyebrow" style={{ color: t.text, fontSize: 8, lineHeight: 10 }}>{label}</Text>
     </View>
   );
 }

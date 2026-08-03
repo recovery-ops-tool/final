@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance';
-import type { ApiResponse } from '@/types/core';
+import type { ApiResponse, PagedResponse } from '@/types/core';
 import type { VisitLogRequest, VisitLogResponse } from '@/types/domain';
 
 export interface VisitPhoto {
@@ -52,6 +52,22 @@ export const visitLogApi = {
     const response = await axiosInstance.get<ApiResponse<{ lat: number; lng: number } | null>>(
       `/api/v1/visit-logs/allocation/${allocationId}/last-location`,
     );
+    return response.data.data;
+  },
+
+  listMyVisits: async (params?: { page?: number; size?: number }): Promise<PagedResponse<VisitLogResponse>> => {
+    const response = await axiosInstance.get<ApiResponse<PagedResponse<VisitLogResponse>>>('/api/v1/visit-logs', {
+      params: {
+        page: params?.page ?? 0,
+        size: params?.size ?? 100,
+        sort: 'visitDate,desc'
+      }
+    });
+    return response.data.data;
+  },
+
+  getById: async (id: string): Promise<VisitLogResponse> => {
+    const response = await axiosInstance.get<ApiResponse<VisitLogResponse>>(`/api/v1/visit-logs/${id}`);
     return response.data.data;
   },
 };

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Sentry from '@sentry/react-native';
 import {
@@ -68,6 +69,10 @@ function RootNavigator() {
             name="sos"
             options={{ headerShown: true, title: '', presentation: 'fullScreenModal' }}
           />
+          <Stack.Screen
+            name="visit-detail/[id]"
+            options={{ headerShown: false, presentation: 'card' }}
+          />
         </Stack.Protected>
 
         <Stack.Protected guard={!isAuthenticated}>
@@ -93,10 +98,12 @@ function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <AuthProvider>
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <RootNavigator />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+        <RootNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 

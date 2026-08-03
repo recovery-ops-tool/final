@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Image } from 'react-native';
+import { View, Image, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
+import { Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
-import { CalendarCheck, IndianRupee, Handshake, MapPinCheck, CloudOff, RefreshCw, Radio } from 'lucide-react-native';
+import { CalendarCheck, IndianRupee, Handshake, MapPinCheck, CloudOff, RefreshCw, Radio, Bell } from 'lucide-react-native';
+import { useNotificationsBadge } from '@/hooks/useNotificationsBadge';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/theme/useTheme';
@@ -26,6 +30,22 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const unreadCount = useNotificationsBadge();
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const cached = await AsyncStorage.getItem('user_avatar_uri');
+          setAvatarUri(cached);
+        } catch (e) {
+          console.log('Failed to load avatar from cache', e);
+        }
+      })();
+    }, [])
+  );
+
   const { pending, syncing } = useOfflineSync();
   const { shift, starting, ending, error: shiftError, startShift, endShift } = useShiftTracking();
   const [, forceTick] = useState(0);
@@ -112,33 +132,70 @@ export default function HomeScreen() {
         end={{ x: 0, y: 1 }}
         style={{ paddingHorizontal: spacing.s4, paddingTop: insets.top + spacing.s4, paddingBottom: spacing.s5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}
       >
-        {/* Header row: Logo on the left, Avatar on the right */}
+        {/* Header row: Logo on the left, Icons (Bell & Avatar) on the right */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.s3 }}>
           <Image 
             source={require('../../../assets/images/logo.png')} 
             style={{ width: 120, height: 32, resizeMode: 'contain', marginLeft: -spacing.s5 }} 
           />
           
-          {/* Circular Avatar */}
-          <View style={{ 
-            width: 36, 
-            height: 36, 
-            borderRadius: 18, 
-            backgroundColor: '#065F46', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            borderWidth: 1,
-            borderColor: '#A7F3D0'
-          }}>
-            <Text style={{ 
-              color: '#FFFFFF', 
-              fontSize: 14, 
-              fontWeight: 'bold' 
-            }}>
-              {(user?.firstName?.[0] ?? 'F') + (user?.lastName?.[0] ?? 'O')}
-            </Text>
-          </View>
+          {/* Action Icons Wrapper */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
+            {/* Bell/Notification Icon */}
+            <Pressable 
+              onPress={() => router.push('/notifications')}
+              style={{ position: 'relative', padding: 4 }}
+            >
+              <Bell size={24} color="#065F46" />
+              {unreadCount > 0 ? (
+                <View style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -2,
+                  backgroundColor: '#D93025',
+                  borderRadius: 8,
+                  minWidth: 16,
+                  height: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingHorizontal: 3
+                }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700' }}>
+                    {unreadCount}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+
+            {/* Circular Avatar */}
+            <Pressable 
+              onPress={() => router.push('/profile')}
+            style={{ 
+              width: 36, 
+              height: 36, 
+              borderRadius: 18, 
+              backgroundColor: '#065F46', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: '#A7F3D0',
+              overflow: 'hidden'
+            }}
+          >
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={{ width: 36, height: 36 }} />
+            ) : (
+              <Text style={{ 
+                color: '#FFFFFF', 
+                fontSize: 14, 
+                fontWeight: 'bold' 
+              }}>
+                {(user?.firstName?.[0] ?? 'F') + (user?.lastName?.[0] ?? 'O')}
+              </Text>
+            )}
+          </Pressable>
         </View>
+      </View>
 
         <View style={{ marginBottom: spacing.s4 }}>
           <Text variant="caption" style={{ color: '#065F46', fontWeight: '500' }}>Welcome back</Text>
