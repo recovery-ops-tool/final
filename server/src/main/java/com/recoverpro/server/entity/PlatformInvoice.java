@@ -1,5 +1,6 @@
 package com.recoverpro.server.entity;
 
+import com.recoverpro.server.enums.PaymentProviderType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -7,22 +8,26 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Local mirror of a Stripe invoice for this platform's own SaaS billing --
+ * Local mirror of a provider invoice for this platform's own SaaS billing --
  * money organizations pay us. Unrelated to loan-repayment collections; see
  * {@link PaymentTransaction} for money borrowers pay to organizations.
  *
- * <p>Stripe is the system of record. Rows are written only by
- * {@code StripeWebhookService} on {@code invoice.*} events and by the one-shot
- * backfill, so treat every field here as a cache of Stripe's value.
+ * <p>The provider (Stripe or Razorpay -- see {@link #getProvider()}) is the system of
+ * record. Rows are written only by {@code StripeWebhookService}/{@code RazorpayWebhookService}
+ * on their respective billing events and by the one-shot backfill, so treat every field here as
+ * a cache of the provider's value. Razorpay Subscriptions has no separate "invoice" object the
+ * way Stripe does -- {@link #getProviderInvoiceId()} holds the Razorpay payment id for Razorpay
+ * rows, synthesized at the point a subscription charge succeeds (see
+ * {@code RazorpayWebhookService#mirrorInvoice}).
  *
- * <p>Amounts are in the smallest currency unit (paise for INR), matching Stripe.
+ * <p>Amounts are in the smallest currency unit (paise for INR), matching both providers.
  * Note this differs from {@link OrgSubscription#getPlanAmount()}, which is in
  * rupees.
  */
 @Entity
 @Table(name = "platform_invoices", indexes = {
         @Index(name = "idx_platform_invoices_org_issued", columnList = "org_id, issued_at"),
-        @Index(name = "idx_platform_invoices_stripe_id", columnList = "stripe_invoice_id", unique = true)
+        @Index(name = "idx_platform_invoices_provider_id", columnList = "provider_invoice_id", unique = true)
 })
 @Getter
 @Setter
@@ -38,11 +43,16 @@ public class PlatformInvoice {
     @Column(name = "org_id", nullable = false)
     private UUID orgId;
 
-    @Column(name = "stripe_invoice_id", nullable = false, unique = true, length = 64)
-    private String stripeInvoiceId;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private PaymentProviderType provider = PaymentProviderType.STRIPE;
 
-    @Column(name = "stripe_customer_id", length = 64)
-    private String stripeCustomerId;
+    @Column(name = "provider_invoice_id", nullable = false, unique = true, length = 64)
+    private String providerInvoiceId;
+
+    @Column(name = "provider_customer_id", length = 64)
+    private String providerCustomerId;
 
     /** Stripe's human-facing invoice number, e.g. {@code ABCD-0001}. Null while draft. */
     @Column(name = "number", length = 64)

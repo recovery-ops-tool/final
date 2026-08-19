@@ -1,13 +1,41 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # Built, not the bare postgres:16-alpine image -- adds the AWS CLI for WAL
+    # archiving (ops/backup/pg-wal-archive.sh) and switches to Debian glibc, which
+    # the official AWS CLI package requires. See ops/backup/README.md before ever
+    # changing this base image again on a database with existing data: musl (alpine)
+    # and glibc (debian) order text collations differently, which can silently
+    # corrupt any index built on a libc-collated text column.
+    build:
+      context: ./ops/backup
+      dockerfile: postgres.Dockerfile
     restart: unless-stopped
     environment:
       POSTGRES_DB: opstool
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    # archive_timeout bounds the RPO gap even during low-write periods -- without it,
+    # archive_command only fires when a 16MB WAL segment fills, which could be hours.
+    # See docs/RUNBOOK-DR.md SYSTEM 41 TASK 41.2 for the RPO/RTO decision this serves.
+    command:
+      - postgres
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=/backup-scripts/pg-wal-archive.sh %p %f
+      - -c
+      - archive_timeout=300
+      - -c
+      - wal_level=replica
+    # `required: false` (Compose Specification, Docker Compose v2.24+) so a fresh
+    # checkout without ops/backup/.env yet created still starts -- archiving/backup
+    # env vars just come back empty until someone runs the setup in ops/backup/README.md.
+    env_file:
+      - path: ./ops/backup/.env
+        required: false
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./ops/backup:/backup-scripts:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 10s
@@ -72,3 +100,15 @@ volumes:
   ollama_models:
   caddy_data:
   caddy_config:
+
+# SYSTEM 05 TASK 5.1: without an explicit subnet, Docker auto-assigns the bridge network's
+# CIDR, which is not stable across recreations of this compose project -- pinning it here so
+# TRUSTED_PROXY_CIDR (server/application.properties, see docs/CONFIG-REFERENCE.md) can be set
+# to a known, fixed value instead of drifting. Only nginx-inside-`web` and Caddy ever proxy to
+# `backend` (the two-hop chain documented in docs/INFRA-CURRENT.md), so this subnet is the
+# value TRUSTED_PROXY_CIDR should trust.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

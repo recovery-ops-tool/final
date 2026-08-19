@@ -32,3 +32,14 @@ jobs:
       - run: npm run lint
         continue-on-error: true
       - run: npm run build
+      # SYSTEM 06 TASK 6.3.a: 1 pre-existing HIGH finding as of 2026-08-18 -- xlsx (SheetJS)
+      # has an unpatched prototype-pollution/ReDoS advisory with no fix available. Checked:
+      # this app only ever calls XLSX.write/aoa_to_sheet on its own generated data
+      # (web/src/utils/visitExport.ts) -- it never parses untrusted input (XLSX.read is not
+      # called anywhere), so the exploitable path (parsing a malicious spreadsheet) isn't
+      # reachable here. The server-side untrusted-upload path uses Apache POI (Java), an
+      # entirely separate library. Non-blocking until xlsx is replaced or the advisory is
+      # patched upstream -- revisit if either changes, or if this file ever grows a read/parse
+      # path.
+      - run: npm audit --audit-level=high
+        continue-on-error: true

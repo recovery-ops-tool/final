@@ -9,6 +9,7 @@ import com.recoverpro.server.dto.response.AllocationResponse;
 import com.recoverpro.server.dto.response.NonContactableResponse;
 import com.recoverpro.server.entity.NonContactable;
 import com.recoverpro.server.repository.NonContactableRepository;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.AllocationService;
 import com.recoverpro.server.service.NonContactableService;
@@ -38,11 +39,9 @@ public class NonContactableController {
     private static final String SUBMITTERS =
             "hasAnyRole('FO')";
 
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
+    private static final String READERS = Authz.ALL_STAFF;
 
-    private static final String ADMINS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')";
+    private static final String ADMINS = Authz.ADMINS;
 
     private final NonContactableRepository repo;
     private final AllocationService allocationService;

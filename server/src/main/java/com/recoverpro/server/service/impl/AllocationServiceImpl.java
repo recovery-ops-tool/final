@@ -1,5 +1,6 @@
 package com.recoverpro.server.service.impl;
 
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
@@ -52,6 +53,24 @@ public class AllocationServiceImpl implements AllocationService {
     private final ActiveDatasetResolver activeDatasetResolver;
     private final NotificationService notificationService;
     private final com.recoverpro.server.security.encryption.LookupHashService lookupHashService;
+
+    /**
+     * TASK 26.2: {@code sortBy} used to flow straight from the request into {@code Sort.by()} with
+     * no validation at all -- a caller could request {@code sortBy=borrowerName} (an
+     * {@code EncryptedStringConverter} field, sorting on ciphertext bytes -- meaningless but still
+     * against the rule 26.2.b states directly) or any nonexistent/internal property, which
+     * {@code findAllWithFilters}'s JPQL {@code ORDER BY} would then fail to resolve at runtime
+     * (500, not the 400 ACCEPTANCE requires). Only plain, non-encrypted, genuinely list-relevant
+     * columns are allowed.
+     */
+    private static final Map<String, String> SORTABLE_FIELDS = Map.of(
+            "createdAt", "createdAt",
+            "updatedAt", "updatedAt",
+            "status", "status",
+            "outstandingAmount", "outstandingAmount",
+            "totalDue", "totalDue",
+            "loanNumber", "loanNumber",
+            "assignedAt", "assignedAt");
 
     private static final UUID NO_ACTIVE_DATASET =
             UUID.fromString("00000000-0000-0000-0000-000000000000");
@@ -300,9 +319,6 @@ public class AllocationServiceImpl implements AllocationService {
     }
 
     private Sort buildSort(String sortBy, String sortDirection) {
-        String field = StringUtils.hasText(sortBy) ? sortBy : "createdAt";
-        Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection)
-                ? Sort.Direction.ASC : Sort.Direction.DESC;
-        return Sort.by(direction, field);
+        return SafeSort.from(sortBy, sortDirection, SORTABLE_FIELDS, "createdAt");
     }
 }

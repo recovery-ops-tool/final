@@ -13,6 +13,8 @@ import com.recoverpro.server.service.AuditEventRequest;
 import com.recoverpro.server.service.AuditService;
 import com.recoverpro.server.service.ExportService;
 import com.recoverpro.server.service.NotificationService;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.function.Function;
@@ -39,6 +42,7 @@ public class ReportJobExecutor {
     private final ExportService exportService;
     private final NotificationService notificationService;
     private final AuditService auditService;
+    private final MeterRegistry meterRegistry;
 
     @Async("reportingTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -67,6 +71,7 @@ public class ReportJobExecutor {
             reportJobRepository.save(job);
             log.info("Report job completed: id={} file={}", jobId, fileName);
             auditReportGeneration(job, AuditResult.SUCCESS, null);
+            recordDuration(job, "success");
 
             if (job.getRequestedBy() != null) {
                 notificationService.create(job.getRequestedBy(), job.getOrganizationId(), NotificationType.REPORT_READY,
@@ -82,7 +87,19 @@ public class ReportJobExecutor {
             job.setCompletedAt(Instant.now());
             reportJobRepository.save(job);
             auditReportGeneration(job, AuditResult.FAILURE, e.getMessage());
+            recordDuration(job, "failure");
         }
+    }
+
+    /** SYSTEM 12 TASK 12.2: report_generation_duration_seconds{reportType, format, outcome}. */
+    private void recordDuration(ReportJob job, String outcome) {
+        if (job.getStartedAt() == null || job.getCompletedAt() == null) return;
+        Timer.builder("report_generation_duration_seconds")
+                .tag("reportType", job.getReportType().name())
+                .tag("format", job.getExportFormat().name())
+                .tag("outcome", outcome)
+                .register(meterRegistry)
+                .record(Duration.between(job.getStartedAt(), job.getCompletedAt()));
     }
 
     /** Async executor thread has no SecurityContext (see AsyncConfig's task decorator), so actor

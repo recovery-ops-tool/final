@@ -66,17 +66,98 @@ true:
   confirms both token-row creation and correct search results) plus the fixed
   `AllocationRepositorySearchTest`.
 
-## Not done this session (deferred)
+## TASK 26.2 — Specification consistency audit [DONE] (2026-08-19 session)
 
-- **TASK 26.2 — Specification consistency audit** (sort-field allowlisting across every
-  `*Specification` class; unvalidated sort params are an information-disclosure/injection vector).
-  Not started.
-- **TASK 26.3 — Pagination correctness** (deterministic tiebreaker sort key; keyset pagination for
-  high-volume lists). Not started.
+### Drift from the task's own framing
 
-Both are P1, distinct from TASK 26.1's P0 encryption bug, and substantial enough (auditing every
-`*Specification` class across the codebase) to warrant their own session rather than a rushed
-pass at the end of an already-long one.
+26.2.a's literal instruction is "list every `*Specification` class" -- there are only two
+(`AuditEventSpecification`, `PtpSpecification`), and both were already clean: every predicate is
+conditionally added only when its filter value is non-null (and non-blank for the one String
+field, `loanNumber`), so null/empty filters are correctly ignored rather than matching nothing.
+No bug found there.
+
+**The real, live vulnerability 26.2.b describes ("a caller sorting by an encrypted or unrelated
+column can infer data") was NOT in either `*Specification` class -- it was in ad-hoc `Sort`
+construction scattered across ~20 controller/service call sites that never went through a
+`*Specification` at all.** Two failure modes, both real:
+
+1. **`AllocationServiceImpl.buildSort()`** took `sortBy` straight from the request into
+   `Sort.by(direction, field)` with zero validation. A caller could request
+   `sortBy=borrowerName` -- an `EncryptedStringConverter` field -- sorting on ciphertext bytes, or
+   any nonexistent property, which `findAllWithFilters`'s JPQL `ORDER BY` would fail to resolve at
+   runtime (an uncaught 500, not the 400 ACCEPTANCE requires). This is the Allocations list --
+   probably the single highest-traffic endpoint in the app.
+2. **`AttendanceController.getByOrgAndDate()` and `VisitLogController`'s two paged endpoints**
+   accepted a raw Spring-bound `Pageable` whose `Sort` is populated directly from the client's own
+   `?sort=` query parameter by `PageableHandlerMethodArgumentResolver` -- which applies no
+   allowlisting of its own -- then handed it straight to a JPA repository method
+   (`findByOrgIdAndAttendanceDate`, `findByAgentIdAndIsDeletedFalse`,
+   `findByOrganizationIdAndIsDeletedFalse`). `VisitLog.contactPerson`/`contactNumber` are also
+   `EncryptedStringConverter` fields, same risk as Allocation's `borrowerName`.
+
+A separate, already-existing `SafeSort` utility (`common/SafeSort.java`) was already correctly used
+by 4 controllers (`UserController`, `PtpController`, `CollectionController`, one
+`AssignmentController` endpoint) -- but its own `from()` silently substituted the default field for
+an unrecognized request instead of rejecting it, which doesn't meet 26.2.b's own wording
+("allowlist... and reject anything else") or the task's literal ACCEPTANCE.
+
+### Fix
+
+- `SafeSort.from()`: unrecognized field now throws `BusinessException` (400) instead of silently
+  substituting. Fixes the behavior for all 4 pre-existing callers too, not just new ones.
+- `SafeSort.sanitize(Pageable, allowed, defaultField, defaultDirection)` (new): the counterpart for
+  a raw Spring-bound `Pageable` -- unsorted input keeps the endpoint's own default, a requested
+  property is validated through the same `from()` allowlist/reject path.
+- `AllocationServiceImpl.buildSort()` now calls `SafeSort.from()` with an explicit allowlist
+  (createdAt, updatedAt, status, outstandingAmount, totalDue, loanNumber, assignedAt -- no
+  encrypted fields).
+- `AttendanceController`/`VisitLogController`'s three endpoints now sanitize their `Pageable` via
+  `SafeSort.sanitize()` before it reaches the repository. Preserved each endpoint's original
+  default direction exactly (`AttendanceController` previously had NO default sort at all --
+  genuinely unsorted -- now defaults to `attendanceDate` DESC, a deliberate improvement rather than
+  a behavior hazard, since "no deterministic order" is itself the class of bug TASK 26.3 exists to
+  close).
+
+**Indexing** (26.2.a's third sub-item): both `AuditEvent` and `PtpRecord` have composite indexes
+covering every equality/range filter their Specifications use except `severity`/`result`
+(AuditEvent) and the `loanNumber` LIKE/`reminderSent` filters (PtpRecord) -- all four are either
+low-cardinality booleans/enums or a `LIKE '%...%'` pattern a btree index can't accelerate anyway
+(would need a trigram/GIN index, a bigger infra decision). Every AuditEvent query is additionally
+bounded by `organization_id` via RLS regardless. Flagged, not built -- performance-only, not a
+correctness or security gap, and building a speculative index/extension with no real query-volume
+data to justify it is the exact anti-pattern SYSTEM 02 TASK 2.2 already rejected (see
+`docs/DB-HOTSPOTS.md`'s own conclusion).
+
+## TASK 26.3 — Pagination correctness [26.3.a DONE, 26.3.b DEFERRED] (2026-08-19 session)
+
+### 26.3.a — deterministic tiebreaker [DONE]
+
+`SafeSort.withIdTiebreaker(Sort)` (new): appends `id` ascending as a final sort key unless the sort
+already includes it. Applied to **every** paginated query in the codebase that builds a `Sort` --
+not just the 26.2 vulnerability sites: all 8 `SafeSort`-consuming controllers get it automatically
+(`from()` and `sanitize()` both route through it), plus ~14 more files that build a `Sort` from a
+hardcoded literal field (`AgentFieldController`, `AuditEventController`, `AssignmentController`'s
+second endpoint, `CalendarController`, `BorrowerController`, `AuditLogController` (5 sites),
+`MessageTemplateController`, `LucienController`, `FraudCaseController`, `FileUploadController` (2
+sites), `ReconciliationController` (2 sites), `UserCreationRequestController` (2 sites),
+`ReportingController` (3 sites), `NpaController`) -- every one of those sorts by a field many rows
+can tie on (`createdAt`, `status`, an amount, ...), so without a unique final key, rows can appear
+on two pages or on none as data changes underneath a paging client. Confirmed every entity involved
+has an `id` property (`String` for `ChatSession`, `UUID` for everything else -- `Sort.by("id")`
+doesn't care about the underlying type).
+
+### 26.3.b — keyset pagination [DEFERRED, not a code change]
+
+**Not built.** `docs/DB-HOTSPOTS.md` (SYSTEM 02, real `pg_stat_statements` harvest against the only
+representative database that exists) already found: no table in this codebase exceeds ~10k rows,
+`allocations` itself has 1,906. Deep-OFFSET degradation is a phenomenon that bites at a materially
+larger scale than anything measurable today -- no live OCI/production instance exists yet
+(`docs/INFRA-CURRENT.md`, SYSTEM 05 not provisioned). Building keyset-pagination infrastructure now,
+with zero real query-volume data to validate it against, is the identical speculative-optimization
+mistake SYSTEM 02 TASK 2.2 explicitly declined to make for indexes. 26.3.b's own task wording says
+"consider," not a hard ACCEPTANCE requirement (unlike 26.3.a, which the literal ACCEPTANCE line
+covers). Revisit once real production data volume exists -- re-run `docs/DB-HOTSPOTS.md`'s harvest
+queries against it first, per that file's own closing instruction.
 
 ## Verification
 
@@ -86,3 +167,9 @@ first fully-green full-suite run this session (every earlier run had exactly one
 unrelated pre-existing one). SYSTEM 26's own specified command
 (`-Dtest='*Specification*Test,*Search*Test,*Filter*Test'`) run separately — see session's final
 report for its pass/fail count.
+
+TASK 26.2/26.3 (2026-08-19 session) — new tests: `SafeSortTest` (from()/sanitize()/
+withIdTiebreaker() -- reject-unknown-field, blank/null defaults, tiebreaker presence and
+non-duplication), `AllocationServiceImplSortTest` (disallowed/unknown field rejects before any
+query; allowed field proceeds). Full `mvn -f server/pom.xml clean test` run at the end of this
+session — see session's final report for pass/fail counts.

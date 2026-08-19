@@ -224,8 +224,13 @@ public class LiveTrackWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void broadcast(UUID orgId, ObjectNode node) {
-        try { broadcast(orgId, objectMapper.writeValueAsString(node)); }
-        catch (Exception ignored) {}
+        // SYSTEM 13 TASK 13.2: was silent -- matches SosAudioWebSocketHandler's identical-purpose
+        // method, which already logs this same failure mode.
+        try {
+            broadcast(orgId, objectMapper.writeValueAsString(node));
+        } catch (Exception e) {
+            log.warn("LiveTrack relay serialization failed: {}", e.getMessage());
+        }
     }
 
     private void broadcast(UUID orgId, String json) {

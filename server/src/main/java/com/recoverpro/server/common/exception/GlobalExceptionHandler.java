@@ -1,6 +1,7 @@
 package com.recoverpro.server.common.exception;
 
 import com.recoverpro.server.exception.*;
+import io.sentry.Sentry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -104,6 +105,12 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "Account Disabled", ex.getMessage(), req);
     }
 
+    @ExceptionHandler(OrganizationSuspendedException.class)
+    public ResponseEntity<ErrorResponse> handleOrganizationSuspended(OrganizationSuspendedException ex, HttpServletRequest req) {
+        log.warn("Suspended-organization access attempt");
+        return build(HttpStatus.FORBIDDEN, "Organization Suspended", ex.getMessage(), req);
+    }
+
     @ExceptionHandler(MfaSetupRequiredException.class)
     public ResponseEntity<ErrorResponse> handleMfaRequired(MfaSetupRequiredException ex, HttpServletRequest req) {
         return build(HttpStatus.FORBIDDEN, "MFA Setup Required", ex.getMessage(), req);
@@ -182,6 +189,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest req) {
         log.error("Unexpected error at {} {}", req.getMethod(), req.getRequestURI(), ex);
+        // SYSTEM 13 TASK 13.1: this is the deliberate, explicit capture point -- Sentry's own
+        // HandlerExceptionResolver (order=1 by default) never actually sees exceptions in this
+        // app, because every one of them is handled by this @RestControllerAdvice first (Spring's
+        // ExceptionHandlerExceptionResolver has default-precedence order 0, so it wins the
+        // resolver-chain race and the composite resolver never reaches Sentry's). This catch-all
+        // is specifically where a genuinely unanticipated exception lands -- deliberately NOT
+        // added to the other handlers above, which are expected/curated business exceptions
+        // (BusinessException, ResourceNotFoundException, ...), not the "new exception type
+        // appearing after a deploy" this task exists to catch. No-op when SENTRY_DSN is unset.
+        Sentry.captureException(ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error",
                 "An unexpected error occurred", req);
     }

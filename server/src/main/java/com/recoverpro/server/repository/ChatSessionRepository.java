@@ -58,4 +58,11 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, String
     @Modifying
     @Query("DELETE FROM ChatSession s WHERE s.createdAt < :cutoff")
     int deleteSessionsOlderThan(@Param("cutoff") Instant cutoff);
+
+    /** SYSTEM 18 TASK 18.4: agentFirstName is a denormalized (encrypted) snapshot of the FO's
+     *  first name -- see PtpHistoryRepository#scrubChangedByName's javadoc for why a JPQL bulk
+     *  UPDATE is the right tool here. */
+    @Modifying
+    @Query("UPDATE ChatSession s SET s.agentFirstName = :tombstone WHERE s.agentId = :agentId")
+    int scrubAgentFirstName(@Param("agentId") UUID agentId, @Param("tombstone") String tombstone);
 }

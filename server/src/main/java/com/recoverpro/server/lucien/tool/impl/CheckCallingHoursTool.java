@@ -37,7 +37,7 @@ public class CheckCallingHoursTool implements LucienTool {
 
     @Override
     public String execute(JsonNode args, UserPrincipal principal) {
-        orgIsolationGuard.belongsToOrg(principal.getOrganizationId());
+        orgIsolationGuard.assertBelongsToOrg(principal.getOrganizationId());
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Kolkata"));
         boolean allowed = callingHoursGuard.isAllowedFor(principal.getOrganizationId(), now);
         String denial = callingHoursGuard.denialReason(principal.getOrganizationId(), now);

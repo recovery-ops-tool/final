@@ -34,13 +34,15 @@ export default function CaseTimeline({ allocationId }: Props) {
     Promise.all([
       apiClient.get(`/api/v1/cases/${allocationId}/timeline`).catch(() => ({ data: { data: { events: [] } } })),
       apiClient.get(`/api/v1/visit-logs/allocation/${allocationId}`).catch(() => ({ data: { data: [] } })),
-      apiClient.get(`/api/v1/ptps/allocation/${allocationId}`).catch(() => ({ data: { data: [] } }))
+      apiClient.get(`/api/v1/ptps/allocation/${allocationId}`).catch(() => ({ data: { data: [] } })),
+      apiClient.get(`/api/v1/call-logs/allocation/${allocationId}`).catch(() => ({ data: { data: [] } }))
     ])
-    .then(([timelineRes, visitsRes, ptpsRes]) => {
+    .then(([timelineRes, visitsRes, ptpsRes, callsRes]) => {
       if (cancelled) return;
       const timelineData = (unwrapApiResponse<CaseTimelineResponse>(timelineRes.data) || { events: [] }) as CaseTimelineResponse;
       const visits = unwrapApiResponse<any[]>(visitsRes.data) || [];
       const ptps = unwrapApiResponse<any[]>(ptpsRes.data) || [];
+      const calls = unwrapApiResponse<any[]>(callsRes.data) || [];
       
       const newEvents = [...(timelineData.events || [])];
       
@@ -69,7 +71,22 @@ export default function CaseTimeline({ allocationId }: Props) {
           data: { amount: p.promisedAmount, date: p.promisedDate }
         });
       }
-      
+
+      // Inject calls
+      for (const c of calls) {
+        const outcomeLabel = c.outcome ? String(c.outcome).replace(/_/g, ' ').toLowerCase() : 'no outcome recorded';
+        newEvents.push({
+          timestamp: c.initiatedAt || c.createdAt,
+          eventType: 'CALL_MADE',
+          summary: `Call by ${c.agentName || 'Agent'} — ${outcomeLabel}`,
+          actorName: c.agentName,
+          sourceTable: 'CALL_LOG',
+          sourceId: c.id,
+          narrative: c.notes,
+          data: { outcome: c.outcome, durationSeconds: c.durationSeconds, phone: c.phoneMasked }
+        });
+      }
+
       // Sort descending
       timelineData.events = newEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setData(timelineData);

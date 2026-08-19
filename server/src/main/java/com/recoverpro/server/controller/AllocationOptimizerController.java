@@ -3,6 +3,7 @@ package com.recoverpro.server.controller;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.dto.request.OptimizeAssignmentOrderRequest;
 import com.recoverpro.server.dto.response.OptimizedAssignmentOrderResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.service.AllocationOptimizerService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +21,7 @@ public class AllocationOptimizerController {
     private final AllocationOptimizerService allocationOptimizerService;
 
     @PostMapping("/optimize-order")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(Authz.ADMINS)
     public ResponseEntity<ApiResponse<OptimizedAssignmentOrderResponse>> optimize(
             @Valid @RequestBody OptimizeAssignmentOrderRequest request) {
         log.info("POST /api/v1/assignments/optimize-order - allocations={}, agent={}",

@@ -1,10 +1,12 @@
 package com.recoverpro.server.controller;
 
 import com.recoverpro.server.dto.request.NpaFlagRequest;
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.dto.response.NpaReportResponse;
 import com.recoverpro.server.enums.NpaRiskLevel;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.NpaService;
 import jakarta.validation.Valid;
@@ -28,8 +30,8 @@ import java.util.UUID;
 @Slf4j
 public class NpaController {
 
-    private static final String READERS = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
-    private static final String ADMINS = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')";
+    private static final String READERS = Authz.LEADS;
+    private static final String ADMINS = Authz.ADMINS;
 
     private final NpaService npaService;
 
@@ -59,7 +61,8 @@ public class NpaController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Page<NpaReportResponse.NpaRecordResponse> result = npaService.getNpaRecords(
-                orgId, riskLevel, PageRequest.of(page, size, Sort.by("overdueDays").descending()));
+                orgId, riskLevel, PageRequest.of(page, size,
+                        SafeSort.withIdTiebreaker(Sort.by("overdueDays").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 

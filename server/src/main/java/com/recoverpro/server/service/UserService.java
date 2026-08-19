@@ -35,6 +35,25 @@ public interface UserService {
 
     void deleteUser(UUID callerOrgId, UUID targetUserId);
 
+    /** SYSTEM 18 TASK 18.3: users who have never completed onboarding (no successful login yet,
+     *  still on the server-generated password from creation) -- the "pending invite" list. */
+    List<UserResponse> listPendingInvites(UUID callerOrgId);
+
+    /** Re-sends the welcome OTP, invalidating any earlier one. Only valid while the invite is
+     *  still pending (see {@link #listPendingInvites}); rejects once the user has logged in. */
+    void resendInvite(UUID callerOrgId, UUID targetUserId);
+
+    /** Revokes a still-pending invite: disables the account and invalidates any outstanding OTP
+     *  so it can no longer be redeemed. Rejects once the user has already completed onboarding --
+     *  use {@link #disableUser} for an active account instead. */
+    void revokeInvite(UUID callerOrgId, UUID targetUserId);
+
+    /** SYSTEM 18 TASK 18.4: GDPR erasure for a verified data-subject request. Scrubs PII on the
+     *  {@code users} row itself (same fields {@link #deleteUser} already scrubs, plus the MFA
+     *  secret) and every other table known to hold a denormalized copy of this user's identity
+     *  (see docs/PRIVACY.md for the full list and the audit-trail tombstoning position). */
+    void eraseUserData(UUID callerOrgId, UUID targetUserId, String reason);
+
     List<UserResponse> listUsersByRole(UUID callerOrgId, String roleName);
 
     UserPermissionsResponse getUserPermissions(UUID callerOrgId, UUID targetUserId);

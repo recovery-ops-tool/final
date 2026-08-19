@@ -1,6 +1,7 @@
 package com.recoverpro.server.controller;
 
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
+import com.recoverpro.server.config.AppProperties;
 import com.recoverpro.server.dto.request.ReportRequest;
 import com.recoverpro.server.dto.response.ReportJobResponse;
 import com.recoverpro.server.dto.response.TeamPerformanceResponse;
@@ -8,6 +9,7 @@ import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.MisEodReportService;
 import com.recoverpro.server.service.ReportingService;
+import com.recoverpro.server.util.RateLimiter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -20,6 +22,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
@@ -43,9 +47,15 @@ class ReportingControllerTest {
     @Mock private ReportingService reportingService;
     @Mock private MisEodReportService misEodReportService;
     @Mock private PlatformAdminAccessGuard platformAdminAccessGuard;
+    @Mock private RateLimiter rateLimiter;
 
     private ReportingController newController() {
-        return new ReportingController(reportingService, misEodReportService, platformAdminAccessGuard);
+        // SYSTEM 07 TASK 7.3: real AppProperties, not a mock -- the controller reads
+        // getSecurity().getReportGenerateMaxAttempts()/WindowMinutes() off it, and its defaults
+        // are sane values, no need to stub them per test.
+        lenient().when(rateLimiter.isAllowed(anyString(), anyInt(), anyInt())).thenReturn(true);
+        return new ReportingController(
+                reportingService, misEodReportService, platformAdminAccessGuard, rateLimiter, new AppProperties());
     }
 
     private UserPrincipal principalWithRole(String role, UUID orgId) {

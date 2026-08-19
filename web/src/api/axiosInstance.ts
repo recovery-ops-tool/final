@@ -1,8 +1,23 @@
 import axios from 'axios';
+import * as Sentry from '@sentry/react';
 import { toastBus } from '../utils/toastBus';
 import { extractApiError } from '../utils/extractApiError';
 import { session } from '../utils/session';
 import { getDeviceId } from '../utils/deviceId';
+
+/**
+ * SYSTEM 13 TASK 13.3.b: correlate a frontend error with the backend request that triggered it.
+ * The backend (RequestLoggingFilter) sets X-Request-Id on every response, success or error, and
+ * puts the same id in its own logs/audit trail (server/.../config/RequestLoggingFilter.java,
+ * MDC key "requestId" -- see SYSTEM 13's own execution record for why that rename mattered).
+ * Tagging Sentry's scope with the most recent one is a coarse approximation (a global tag, not a
+ * per-request span) -- good enough for "which request was in flight when this broke," which is
+ * the actual debugging question, without needing full request-scoped tracing spans.
+ */
+const tagRequestId = (headers: unknown) => {
+  const requestId = (headers as Record<string, string> | undefined)?.['x-request-id'];
+  if (requestId) Sentry.setTag('requestId', requestId);
+};
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -187,10 +202,15 @@ axiosInstance.interceptors.request.use(
 const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
 
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    tagRequestId(response.headers);
+    return response;
+  },
   async (error) => {
     // Aborted requests are never retried or redirected.
     if (axios.isCancel(error)) return Promise.reject(error);
+
+    tagRequestId(error.response?.headers);
 
     const config = error.config;
     const status: number | undefined = error.response?.status;

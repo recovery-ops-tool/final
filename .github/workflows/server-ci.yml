@@ -57,3 +57,51 @@ jobs:
 
       - name: mvn test
         run: mvn -B test
+
+  # SYSTEM 03 TASK 3.1: separate job, not folded into build-and-test above, so a migration
+  # failure and an application-test failure show up as distinguishable CI signals. Uses the exact
+  # same service-container setup as build-and-test (POSTGRES_USER: opstool bootstraps that role AS
+  # the container's actual superuser -- confirmed by reading the official postgres image's
+  # entrypoint behavior and by locally reproducing the same privilege level with a real superuser
+  # role), which matters because two migrations (V032 pgvector, V097 pg_stat_statements) need
+  # CREATE EXTENSION privilege that a deliberately-restricted app role would not have -- see
+  # docs/RUNBOOK-DEPLOY.md for why that's fine here but NOT fine for a real production bootstrap.
+  migration-validate:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: opstool
+          POSTGRES_USER: opstool
+          POSTGRES_PASSWORD: opstool
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U opstool -d opstool"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_URL: jdbc:postgresql://localhost:5432/opstool
+      DB_USER: opstool
+      DB_PASSWORD: opstool
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: flyway migrate (first pass, from empty)
+        run: mvn -B flyway:migrate
+
+      - name: flyway validate
+        run: mvn -B flyway:validate
+
+      - name: flyway migrate (second pass -- must be a clean no-op, catches non-idempotent DDL)
+        run: mvn -B flyway:migrate

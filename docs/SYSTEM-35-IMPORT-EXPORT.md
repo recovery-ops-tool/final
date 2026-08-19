@@ -112,8 +112,43 @@ genuinely line-by-line. Also out of scope: `FileStorageService.retrieve()` still
 file as a single `byte[]` rather than a stream — that's a SYSTEM 25 (storage) concern, and is a
 fixed-size, much smaller buffer than the row-object blowup this task was about.
 
-## TASK 35.4 — Export controls — NOT DONE, blocked on SYSTEM 25
+## TASK 35.4 — Export controls [PARTIAL — 3 of 4 sub-items done, 2026-08-19 session]
 
-Blocked as documented above. Needs: object storage with presigned/time-limited URLs before
-`DATA_EXPORTED`-style audited, rate-limited, time-limited export delivery can be built as
-specified.
+Revisits this doc's original "skip TASK 35.4 entirely" call. On closer reading, only ONE of
+35.4.b's four requirements ("deliver via time-limited link (SYSTEM 25)") actually depends on
+SYSTEM 25 -- the other three don't, and were real, separately-fixable gaps on the one concrete
+export surface this codebase has: `ExportController.downloadReport()` (report-job file downloads,
+which do move bulk PII out of the system per 35.4.a).
+
+- **Explicit permission**: already satisfied, unchanged -- `@PreAuthorize(Authz.LEADS)`.
+- **Audit every export with DATA_EXPORTED**: found the *download* step (as opposed to report
+  *generation*, which is audited) already recorded an audit event (`ExportServiceImpl.exportReport()`)
+  -- but as `REPORT_EXPORTED` (INFO severity), a codebase-specific action never named by this task,
+  with no filter information. Switched to `DATA_EXPORTED` (HIGH severity -- correctly reflects
+  that this is a bulk PII export, not routine INFO-level activity) and added `metadata.filters` =
+  `ReportJob.parameters`, the original `ReportRequest` already serialized onto the row at
+  generation time (`ReportingServiceImpl.enqueueReport`) -- no new capture needed, it already
+  existed on the row.
+- **Rate-limit exports per user**: report *generation* was already rate-limited
+  (`ReportingController`); the *download* endpoint had none. Added the identical pattern
+  (`RateLimiter` + new `AppProperties.Security.reportDownloadMaxAttempts/WindowMinutes`,
+  30/5min default).
+- **"row count"** (part of 35.4's own ACCEPTANCE line): **not captured, still a real gap.** No
+  report builder in this codebase currently records a result-row-count anywhere on the `ReportJob`
+  row -- adding one needs a schema change (`ReportJob.rowCount` or similar) threaded through every
+  `ReportType`'s builder in `ReportJobExecutor`, a materially larger change than this pass's other
+  fixes. Flagged, not attempted.
+- **"deliver via time-limited link"**: still genuinely blocked on SYSTEM 25 (P1, not built) exactly
+  as this doc's original session concluded -- object storage with presigned URLs doesn't exist;
+  the file is streamed directly through the app with no expiry concept. Unchanged.
+
+**Tests**: `ExportControllerTest` (new -- rate-limit rejection short-circuits before the org-isolation
+check or the actual export call; within-limit proceeds normally), `ExportServiceImplTest` (new --
+audits `DATA_EXPORTED` with `filters` from `job.getParameters()`; a null-parameters job omits the
+key rather than throwing).
+
+## Verification
+
+SYSTEM 35's own specified command (`-Dtest='*Import*Test,*Export*Test,*FileProcessing*Test'`) —
+22/22 passed. Full `mvn -f server/pom.xml clean test` run at the end of this session — see
+session's final report for pass/fail counts.

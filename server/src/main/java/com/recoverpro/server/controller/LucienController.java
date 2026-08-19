@@ -2,6 +2,7 @@ package com.recoverpro.server.controller;
 
 import com.recoverpro.server.annotation.RequiresFeature;
 import com.recoverpro.server.client.SttClient;
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.client.TtsClient;
 import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.config.PlanFeatureMatrix;
@@ -21,6 +22,7 @@ import com.recoverpro.server.dto.response.TranscriptionResponse;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.LucienService;
 import com.recoverpro.server.service.VisitInterviewService;
+import com.recoverpro.server.service.ai.ChatRateLimiter;
 import com.recoverpro.server.service.ai.TranslationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +55,7 @@ public class LucienController {
     private final TtsClient ttsClient;
     private final SttClient sttClient;
     private final TranslationService translationService;
+    private final ChatRateLimiter chatRateLimiter;
 
     @PostMapping("/sessions")
     @RequiresFeature(PlanFeatureMatrix.LUCIEN_AI)
@@ -174,7 +177,7 @@ public class LucienController {
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserPrincipal principal) {
         log.debug("GET /api/v1/lucien/agents/{}/sessions", agentId);
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("createdAt").descending()));
         Page<SessionResponse> sessions = lucienService.getSessionsByAgent(agentId, pageable, principal);
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(sessions), "Agent sessions fetched."));
     }
@@ -186,8 +189,11 @@ public class LucienController {
      */
     @PostMapping(value = "/speak", produces = "audio/wav")
     @RequiresFeature(PlanFeatureMatrix.LUCIEN_AI)
-    public ResponseEntity<byte[]> speak(@Valid @RequestBody SpeakRequest request) {
+    public ResponseEntity<byte[]> speak(
+            @Valid @RequestBody SpeakRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
         log.debug("POST /api/v1/lucien/speak -- lang={}, textLen={}", request.getLang(), request.getText().length());
+        chatRateLimiter.checkAndRecordSpeak(principal.getId());
         String textToSpeak = translationService.translateForSpeech(request.getText(), request.getLang());
         byte[] audio = ttsClient.synthesize(textToSpeak, request.getLang());
         return ResponseEntity.ok().contentType(MediaType.parseMediaType("audio/wav")).body(audio);
@@ -208,6 +214,7 @@ public class LucienController {
             @AuthenticationPrincipal UserPrincipal principal) throws IOException {
         log.debug("POST /api/v1/lucien/transcribe -- agentId={}, lang={}, size={}",
                 principal.getId(), lang, audio.getSize());
+        chatRateLimiter.checkAndRecordTranscribe(principal.getId());
         if (audio.isEmpty()) {
             throw new BusinessException("Audio clip is required.");
         }

@@ -106,6 +106,19 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         if (!passwordEncoder.matches(request.getOtp(), token.getOtpHash())) {
             auditLogService.logUserAction(user.getId(), "PASSWORD_RESET_OTP_FAILED", "Invalid OTP");
+            // SYSTEM 08 TASK 8.4.b: was missing the structured unified_audit_events row entirely
+            // (only the legacy free-text log got one) -- inconsistent with resetPassword()'s own
+            // wrong-OTP branch just below, which already records both. Same action+FAILURE result
+            // as that one: both represent an OTP-verification attempt failing within this reset
+            // flow, and keeping one action for both keeps "did someone try wrong OTPs against this
+            // account" a single, simple query.
+            auditService.record(AuditEventRequest.builder()
+                    .action(AuditAction.AUTH_PASSWORD_RESET_COMPLETED)
+                    .resourceType(AuditResourceType.USER)
+                    .resourceId(user.getId().toString())
+                    .result(AuditResult.FAILURE)
+                    .reason("Invalid OTP provided")
+                    .build());
             throw new InvalidOtpException("Invalid or expired OTP");
         }
         rateLimiter.reset(rateLimitKey);

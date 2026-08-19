@@ -45,7 +45,7 @@ public class GetCasePtpStatusTool implements LucienTool {
 
     @Override
     public String execute(JsonNode args, UserPrincipal principal) {
-        orgIsolationGuard.belongsToOrg(principal.getOrganizationId());
+        orgIsolationGuard.assertBelongsToOrg(principal.getOrganizationId());
         try {
             UUID allocationId = UUID.fromString(args.get("allocationId").asText());
             var ptps = ptpService.getPtpsByAllocationId(allocationId);

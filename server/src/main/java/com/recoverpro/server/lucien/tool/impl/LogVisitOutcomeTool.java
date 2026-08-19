@@ -59,7 +59,7 @@ public class LogVisitOutcomeTool implements LucienTool {
 
     @Override
     public String execute(JsonNode args, UserPrincipal principal) {
-        orgIsolationGuard.belongsToOrg(principal.getOrganizationId());
+        orgIsolationGuard.assertBelongsToOrg(principal.getOrganizationId());
         try {
             UUID orgId = args.hasNonNull("organizationId")
                     ? UUID.fromString(args.get("organizationId").asText())

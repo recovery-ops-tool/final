@@ -3,9 +3,14 @@ package com.recoverpro.server.service.impl;
 import com.recoverpro.server.config.AppProperties;
 import com.recoverpro.server.entity.User;
 import com.recoverpro.server.mapper.UserMapper;
+import com.recoverpro.server.repository.ChatSessionRepository;
+import com.recoverpro.server.repository.OrganizationRepository;
 import com.recoverpro.server.repository.PasswordResetTokenRepository;
 import com.recoverpro.server.repository.PermissionRepository;
+import com.recoverpro.server.repository.PtpHistoryRepository;
+import com.recoverpro.server.repository.PtpRepository;
 import com.recoverpro.server.repository.RoleRepository;
+import com.recoverpro.server.repository.UserCreationRequestRepository;
 import com.recoverpro.server.repository.UserPermissionRepository;
 import com.recoverpro.server.repository.UserRepository;
 import com.recoverpro.server.security.CustomUserDetailsService;
@@ -70,6 +75,11 @@ class UserServiceImplCacheEvictionTest {
         @Bean EntitlementService entitlementService() { return mock(EntitlementService.class); }
         @Bean EmailService emailService() { return mock(EmailService.class); }
         @Bean AppProperties appProperties() { return new AppProperties(); }
+        @Bean OrganizationRepository organizationRepository() { return mock(OrganizationRepository.class); }
+        @Bean PtpHistoryRepository ptpHistoryRepository() { return mock(PtpHistoryRepository.class); }
+        @Bean PtpRepository ptpRepository() { return mock(PtpRepository.class); }
+        @Bean ChatSessionRepository chatSessionRepository() { return mock(ChatSessionRepository.class); }
+        @Bean UserCreationRequestRepository userCreationRequestRepository() { return mock(UserCreationRequestRepository.class); }
 
         @Bean
         org.springframework.cache.CacheManager cacheManager() {
@@ -77,8 +87,9 @@ class UserServiceImplCacheEvictionTest {
         }
 
         @Bean
-        CustomUserDetailsService customUserDetailsService(UserRepository userRepository) {
-            return new CustomUserDetailsService(userRepository);
+        CustomUserDetailsService customUserDetailsService(UserRepository userRepository,
+                OrganizationRepository organizationRepository) {
+            return new CustomUserDetailsService(userRepository, organizationRepository);
         }
 
         @Bean
@@ -87,11 +98,14 @@ class UserServiceImplCacheEvictionTest {
                 PasswordResetTokenRepository passwordResetTokenRepository, UserMapper userMapper,
                 PasswordEncoder passwordEncoder, UserActionAuditService auditLogService, AuditService auditService,
                 EntitlementService entitlementService, EmailService emailService, AppProperties appProperties,
-                CustomUserDetailsService customUserDetailsService) {
+                CustomUserDetailsService customUserDetailsService, PtpHistoryRepository ptpHistoryRepository,
+                PtpRepository ptpRepository, ChatSessionRepository chatSessionRepository,
+                UserCreationRequestRepository userCreationRequestRepository) {
             return new UserServiceImpl(userRepository, roleRepository, permissionRepository,
                     userPermissionRepository, passwordResetTokenRepository, userMapper, passwordEncoder,
                     auditLogService, auditService, entitlementService, emailService, appProperties,
-                    customUserDetailsService);
+                    customUserDetailsService, ptpHistoryRepository, ptpRepository, chatSessionRepository,
+                    userCreationRequestRepository);
         }
     }
 

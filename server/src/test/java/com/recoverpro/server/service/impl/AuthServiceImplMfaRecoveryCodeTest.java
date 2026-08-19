@@ -7,6 +7,7 @@ import com.recoverpro.server.dto.response.AuthResponse;
 import com.recoverpro.server.entity.User;
 import com.recoverpro.server.exception.InvalidTotpException;
 import com.recoverpro.server.mapper.UserMapper;
+import com.recoverpro.server.repository.OrganizationRepository;
 import com.recoverpro.server.repository.RefreshTokenRepository;
 import com.recoverpro.server.repository.UserRepository;
 import com.recoverpro.server.service.AuditService;
@@ -47,6 +48,7 @@ import static org.mockito.Mockito.when;
 class AuthServiceImplMfaRecoveryCodeTest {
 
     @Mock private UserRepository userRepository;
+    @Mock private OrganizationRepository organizationRepository;
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private RateLimiter rateLimiter;
@@ -65,7 +67,7 @@ class AuthServiceImplMfaRecoveryCodeTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthServiceImpl(userRepository, refreshTokenRepository,
+        service = new AuthServiceImpl(userRepository, organizationRepository, refreshTokenRepository,
                 passwordEncoder, rateLimiter, redisTemplate, new AppProperties(), userMapper,
                 auditLogService, auditService, new ObjectMapper(), emailService, mfaService, passwordResetService,
                 refreshTokenRotationService);

@@ -6,7 +6,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
 
 @Slf4j
 @Configuration
@@ -22,6 +25,18 @@ public class EncryptionContext {
 
     @Value("${app.encryption.key-base64:}")
     private String keyBase64;
+
+    // SYSTEM 07 TASK 7.2: which version app.encryption.key-base64 IS right now. Bump this
+    // (and move the old value into previous-keys-base64 below) as the whole rotation procedure --
+    // see docs/RUNBOOK-KEY-ROTATION.md.
+    @Value("${app.encryption.current-key-version:1}")
+    private int currentKeyVersion;
+
+    // Retired keys still needed to decrypt rows the background re-encryption job (PiiKeyRotationJob)
+    // hasn't reached yet. Format: "v:base64key,v:base64key,..." -- e.g. "1:AbC123==". Never
+    // include current-key-version's own number here; that's what app.encryption.key-base64 is for.
+    @Value("${app.encryption.previous-keys-base64:}")
+    private String previousKeysBase64;
 
     @Value("${app.encryption.kms.region:}")
     private String kmsRegion;
@@ -58,14 +73,55 @@ public class EncryptionContext {
                             + "Refusing to start: an auto-generated ephemeral key would make encrypted data "
                             + "unreadable after every restart.");
         }
-        byte[] keyBytes;
-        try {
-            keyBytes = Base64.getDecoder().decode(keyBase64.trim());
-        } catch (IllegalArgumentException e) {
-            throw new EncryptionException("app.encryption.key-base64 is not valid base64", e);
+
+        Map<Integer, SecretKey> keysByVersion = new HashMap<>();
+        keysByVersion.put(currentKeyVersion, LocalKeyEnvelopeEncryptor.toSecretKey(decodeKey(
+                keyBase64, "app.encryption.key-base64")));
+
+        for (String entry : splitPreviousKeys()) {
+            int colon = entry.indexOf(':');
+            if (colon < 0) {
+                throw new EncryptionException(
+                        "app.encryption.previous-keys-base64 entry '" + entry
+                                + "' is not in 'version:base64key' form");
+            }
+            int version;
+            try {
+                version = Integer.parseInt(entry.substring(0, colon).trim());
+            } catch (NumberFormatException e) {
+                throw new EncryptionException(
+                        "app.encryption.previous-keys-base64 entry '" + entry + "' has a non-numeric version");
+            }
+            if (version == currentKeyVersion) {
+                throw new EncryptionException(
+                        "app.encryption.previous-keys-base64 includes version " + version
+                                + ", which is also app.encryption.current-key-version -- a key version must "
+                                + "appear in exactly one of the two places, not both");
+            }
+            if (keysByVersion.containsKey(version)) {
+                throw new EncryptionException(
+                        "app.encryption.previous-keys-base64 lists key version " + version + " more than once");
+            }
+            keysByVersion.put(version, LocalKeyEnvelopeEncryptor.toSecretKey(decodeKey(
+                    entry.substring(colon + 1).trim(), "app.encryption.previous-keys-base64[" + version + "]")));
         }
-        log.info("PII encryption ENABLED with AES-256-GCM.");
-        return new LocalKeyEnvelopeEncryptor(keyBytes);
+
+        log.info("PII encryption ENABLED with AES-256-GCM. currentKeyVersion={}, totalKeyVersionsLoaded={}",
+                currentKeyVersion, keysByVersion.size());
+        return new LocalKeyEnvelopeEncryptor(keysByVersion, currentKeyVersion);
+    }
+
+    private String[] splitPreviousKeys() {
+        if (previousKeysBase64 == null || previousKeysBase64.isBlank()) return new String[0];
+        return previousKeysBase64.split(",");
+    }
+
+    private static byte[] decodeKey(String base64, String propertyDescription) {
+        try {
+            return Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            throw new EncryptionException(propertyDescription + " is not valid base64", e);
+        }
     }
 
     public static EnvelopeEncryptor encryptor() {

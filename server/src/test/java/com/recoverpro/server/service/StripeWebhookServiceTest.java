@@ -149,6 +149,75 @@ class StripeWebhookServiceTest {
         verify(featureFlagService).provisionFlagsFor(sub);
     }
 
+    /** SYSTEM 19 TASK 19.3.c: Stripe does not guarantee delivery order. A stale delivery arriving
+     *  AFTER a newer one already applied must not regress local state back to the older snapshot. */
+    @Test
+    void handleSubscriptionUpserted_staleEventOlderThanLastApplied_doesNotRegressState() {
+        OrgSubscription sub = OrgSubscription.builder()
+                .orgId(UUID.randomUUID())
+                .stripeCustomerId("cus_2b")
+                .status(OrgSubscription.Status.ACTIVE)
+                .plan(OrgSubscription.Plan.GROWTH)
+                .lastWebhookEventAt(Instant.ofEpochSecond(2_000_000_000L))
+                .build();
+        when(subscriptionRepository.findByStripeCustomerId("cus_2b")).thenReturn(Optional.of(sub));
+
+        // An OLDER event (STARTER, cancel-at-period-end) delivered late, after the ACTIVE/GROWTH
+        // state above (from a newer event) has already been applied.
+        Subscription staleSubscription = subscriptionFixture(
+                "sub_2b", "cus_2b", "canceled", "price_starter_123", 1_700_000_000L, true);
+
+        webhookService.handleSubscriptionUpserted(staleSubscription, Instant.ofEpochSecond(1_999_999_000L));
+
+        assertThat(sub.getStatus())
+                .as("a stale event must not regress status back from what a newer event already set")
+                .isEqualTo(OrgSubscription.Status.ACTIVE);
+        assertThat(sub.getPlan()).isEqualTo(OrgSubscription.Plan.GROWTH);
+        verify(subscriptionRepository, never()).save(sub);
+    }
+
+    @Test
+    void handleSubscriptionUpserted_newerEventAfterOlder_appliesAndAdvancesTheClock() {
+        OrgSubscription sub = OrgSubscription.builder()
+                .orgId(UUID.randomUUID())
+                .stripeCustomerId("cus_2c")
+                .status(OrgSubscription.Status.TRIAL)
+                .plan(OrgSubscription.Plan.NONE)
+                .lastWebhookEventAt(Instant.ofEpochSecond(1_000_000_000L))
+                .build();
+        when(subscriptionRepository.findByStripeCustomerId("cus_2c")).thenReturn(Optional.of(sub));
+
+        Subscription newerSubscription = subscriptionFixture(
+                "sub_2c", "cus_2c", "active", "price_growth_123", 1_800_000_000L, false);
+
+        webhookService.handleSubscriptionUpserted(newerSubscription, Instant.ofEpochSecond(1_000_000_500L));
+
+        assertThat(sub.getStatus()).isEqualTo(OrgSubscription.Status.ACTIVE);
+        assertThat(sub.getPlan()).isEqualTo(OrgSubscription.Plan.GROWTH);
+        assertThat(sub.getLastWebhookEventAt()).isEqualTo(Instant.ofEpochSecond(1_000_000_500L));
+    }
+
+    @Test
+    void handleSubscriptionUpserted_noEventTimestamp_alwaysAppliesLikeBeforeTask193() {
+        OrgSubscription sub = OrgSubscription.builder()
+                .orgId(UUID.randomUUID())
+                .stripeCustomerId("cus_2d")
+                .status(OrgSubscription.Status.TRIAL)
+                .plan(OrgSubscription.Plan.NONE)
+                .lastWebhookEventAt(Instant.ofEpochSecond(9_999_999_999L)) // "in the future"
+                .build();
+        when(subscriptionRepository.findByStripeCustomerId("cus_2d")).thenReturn(Optional.of(sub));
+
+        Subscription subscription = subscriptionFixture(
+                "sub_2d", "cus_2d", "active", "price_growth_123", 1_800_000_000L, false);
+
+        // The 1-arg overload (null timestamp) is what backfills/tests with no real event envelope
+        // use -- it must keep unconditionally applying, not suddenly start rejecting everything.
+        webhookService.handleSubscriptionUpserted(subscription);
+
+        assertThat(sub.getStatus()).isEqualTo(OrgSubscription.Status.ACTIVE);
+    }
+
     @Test
     void handleSubscriptionDeleted_marksCancelledAndProvisionsFlags() {
         OrgSubscription sub = OrgSubscription.builder()
@@ -180,6 +249,29 @@ class StripeWebhookServiceTest {
 
         Invoice invoice = new Invoice();
         invoice.setCustomer("cus_4");
+
+        webhookService.handleInvoicePaid(invoice);
+
+        assertThat(sub.getStatus()).isEqualTo(OrgSubscription.Status.ACTIVE);
+        verify(subscriptionRepository).save(sub);
+    }
+
+    /** SYSTEM 19 TASK 19.2.c / 19.3.a (reactivate after cancel): DunningScheduler's grace-period
+     *  expiry only ever flips the LOCAL status to CANCELLED -- it never calls Stripe's own cancel
+     *  API -- so Stripe can still legitimately fire invoice.paid for a subscription this app
+     *  believes is dead. Access must come back immediately, not require a brand-new checkout. */
+    @Test
+    void handleInvoicePaid_recoversFromCancelled_notJustPastDue() {
+        OrgSubscription sub = OrgSubscription.builder()
+                .orgId(UUID.randomUUID())
+                .stripeCustomerId("cus_4b")
+                .status(OrgSubscription.Status.CANCELLED)
+                .plan(OrgSubscription.Plan.STARTER)
+                .build();
+        when(subscriptionRepository.findByStripeCustomerId("cus_4b")).thenReturn(Optional.of(sub));
+
+        Invoice invoice = new Invoice();
+        invoice.setCustomer("cus_4b");
 
         webhookService.handleInvoicePaid(invoice);
 
@@ -340,7 +432,7 @@ class StripeWebhookServiceTest {
     void upsertInvoice_mirrorsNewInvoiceWithStripeAmountsUnconverted() {
         UUID orgId = UUID.randomUUID();
         stubSubscription("cus_10", orgId);
-        when(invoiceRepository.findByStripeInvoiceId("in_10")).thenReturn(Optional.empty());
+        when(invoiceRepository.findByProviderInvoiceId("in_10")).thenReturn(Optional.empty());
 
         Invoice invoice = invoiceFixture("in_10", "cus_10", "paid", "ABCD-0001", 299900L, 299900L);
         invoice.setStatusTransitions(paidAt(1_800_000_000L));
@@ -349,7 +441,7 @@ class StripeWebhookServiceTest {
 
         PlatformInvoice saved = captureSavedInvoice();
         assertThat(saved.getOrgId()).isEqualTo(orgId);
-        assertThat(saved.getStripeInvoiceId()).isEqualTo("in_10");
+        assertThat(saved.getProviderInvoiceId()).isEqualTo("in_10");
         assertThat(saved.getNumber()).isEqualTo("ABCD-0001");
         assertThat(saved.getStatus()).isEqualTo("paid");
         // Paise straight from Stripe -- a /100 anywhere on this path is a 100x revenue bug.
@@ -364,9 +456,9 @@ class StripeWebhookServiceTest {
         stubSubscription("cus_11", orgId);
 
         PlatformInvoice existing = PlatformInvoice.builder()
-                .id(UUID.randomUUID()).stripeInvoiceId("in_11").orgId(orgId)
+                .id(UUID.randomUUID()).providerInvoiceId("in_11").orgId(orgId)
                 .status("open").amountPaid(0L).build();
-        when(invoiceRepository.findByStripeInvoiceId("in_11")).thenReturn(Optional.of(existing));
+        when(invoiceRepository.findByProviderInvoiceId("in_11")).thenReturn(Optional.of(existing));
 
         Invoice invoice = invoiceFixture("in_11", "cus_11", "paid", "ABCD-0002", 299900L, 299900L);
         invoice.setStatusTransitions(paidAt(1_800_000_500L));
@@ -385,10 +477,10 @@ class StripeWebhookServiceTest {
         stubSubscription("cus_12", orgId);
 
         PlatformInvoice existing = PlatformInvoice.builder()
-                .id(UUID.randomUUID()).stripeInvoiceId("in_12").orgId(orgId)
+                .id(UUID.randomUUID()).providerInvoiceId("in_12").orgId(orgId)
                 .status("paid").amountPaid(299900L)
                 .paidAt(Instant.ofEpochSecond(1_800_000_000L)).build();
-        when(invoiceRepository.findByStripeInvoiceId("in_12")).thenReturn(Optional.of(existing));
+        when(invoiceRepository.findByProviderInvoiceId("in_12")).thenReturn(Optional.of(existing));
 
         webhookService.upsertInvoice(
                 invoiceFixture("in_12", "cus_12", "void", "ABCD-0003", 299900L, 0L));
@@ -417,7 +509,7 @@ class StripeWebhookServiceTest {
                 .orgId(UUID.randomUUID()).stripeCustomerId("cus_14")
                 .status(OrgSubscription.Status.ACTIVE).plan(OrgSubscription.Plan.GROWTH).build();
         when(subscriptionRepository.findByStripeCustomerId("cus_14")).thenReturn(Optional.of(sub));
-        when(invoiceRepository.findByStripeInvoiceId("in_14")).thenReturn(Optional.empty());
+        when(invoiceRepository.findByProviderInvoiceId("in_14")).thenReturn(Optional.empty());
 
         Invoice invoice = invoiceFixture("in_14", "cus_14", "paid", "ABCD-0004", 599900L, 599900L);
         invoice.setStatusTransitions(paidAt(1_800_001_000L));
@@ -435,7 +527,7 @@ class StripeWebhookServiceTest {
     void upsertInvoice_paymentIntentPresent_mirrorsPaymentRow() {
         UUID orgId = UUID.randomUUID();
         stubSubscription("cus_20", orgId);
-        when(invoiceRepository.findByStripeInvoiceId("in_20")).thenReturn(Optional.empty());
+        when(invoiceRepository.findByProviderInvoiceId("in_20")).thenReturn(Optional.empty());
         when(invoiceRepository.save(any(PlatformInvoice.class))).thenAnswer(inv -> {
             PlatformInvoice row = inv.getArgument(0);
             row.setId(UUID.randomUUID());
@@ -462,7 +554,7 @@ class StripeWebhookServiceTest {
     void upsertInvoice_noPaymentIntentYet_skipsPaymentMirror() {
         UUID orgId = UUID.randomUUID();
         stubSubscription("cus_21b", orgId);
-        when(invoiceRepository.findByStripeInvoiceId("in_21b")).thenReturn(Optional.empty());
+        when(invoiceRepository.findByProviderInvoiceId("in_21b")).thenReturn(Optional.empty());
 
         Invoice invoice = invoiceFixture("in_21b", "cus_21b", "open", "ABCD-0021", 299900L, 0L);
 
@@ -475,7 +567,7 @@ class StripeWebhookServiceTest {
     void upsertInvoice_uncollectible_stampsFailedAtOnce() {
         UUID orgId = UUID.randomUUID();
         stubSubscription("cus_22", orgId);
-        when(invoiceRepository.findByStripeInvoiceId("in_22")).thenReturn(Optional.empty());
+        when(invoiceRepository.findByProviderInvoiceId("in_22")).thenReturn(Optional.empty());
         when(invoiceRepository.save(any(PlatformInvoice.class))).thenAnswer(inv -> {
             PlatformInvoice row = inv.getArgument(0);
             row.setId(UUID.randomUUID());

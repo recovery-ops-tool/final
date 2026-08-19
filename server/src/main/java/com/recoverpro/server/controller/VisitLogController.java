@@ -1,5 +1,6 @@
 package com.recoverpro.server.controller;
 
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.common.exception.BusinessException;
@@ -8,6 +9,7 @@ import com.recoverpro.server.dto.request.VisitApprovalRequest;
 import com.recoverpro.server.dto.request.VisitLogRequest;
 import com.recoverpro.server.dto.response.AllocationResponse;
 import com.recoverpro.server.dto.response.VisitLogResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.dto.response.VisitImportResult;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
@@ -20,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -41,11 +44,9 @@ public class VisitLogController {
     private static final String SUBMITTERS =
             "hasAnyRole('FO')";
 
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
+    private static final String READERS = Authz.ALL_STAFF;
 
-    private static final String LEADS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
+    private static final String LEADS = Authz.LEADS;
 
     private final VisitLogService visitLogService;
     private final AllocationService allocationService;
@@ -56,11 +57,21 @@ public class VisitLogController {
     private final VisitImportService visitImportService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
 
+    // TASK 26.2: Pageable's Sort is bound directly from the client's own ?sort= query param by
+    // Spring's PageableHandlerMethodArgumentResolver, with no allowlisting of its own -- sanitized
+    // via SafeSort.sanitize() before reaching visitLogRepository.findBy*Paged (contactPerson/
+    // contactNumber are EncryptedStringConverter fields, deliberately excluded).
+    private static final Map<String, String> SORTABLE_FIELDS = Map.of(
+            "visitDate", "visitDate",
+            "visitTime", "visitTime",
+            "createdAt", "createdAt");
+
     @GetMapping
     @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<PagedResponse<VisitLogResponse>>> listVisits(
             @AuthenticationPrincipal UserPrincipal principal,
             @PageableDefault(size = 20, sort = "visitDate") Pageable pageable) {
+        pageable = SafeSort.sanitize(pageable, SORTABLE_FIELDS, "visitDate", Sort.Direction.ASC);
 
         // FOs see only their own visits; leads see the whole org
         if (isOnlyFieldOfficer(principal)) {
@@ -128,7 +139,7 @@ public class VisitLogController {
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')")
+    @PreAuthorize(Authz.ADMINS)
     public ResponseEntity<ApiResponse<VisitImportResult>> importVisits(
             @RequestPart("file") MultipartFile file,
             @RequestParam(required = false) UUID orgId,
@@ -284,6 +295,7 @@ public class VisitLogController {
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID agentId,
             @PageableDefault(size = 20, sort = "visitDate") Pageable pageable) {
+        pageable = SafeSort.sanitize(pageable, SORTABLE_FIELDS, "visitDate", Sort.Direction.ASC);
 
         elevateIfPlatformAdmin(principal, "visitLogs:byAgent:" + agentId);
         Page<VisitLogResponse> page =
@@ -342,7 +354,7 @@ public class VisitLogController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')")
+    @PreAuthorize(Authz.ADMINS)
     public ResponseEntity<ApiResponse<Void>> softDelete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

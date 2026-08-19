@@ -58,6 +58,13 @@ public interface PtpRepository extends JpaRepository<PtpRecord, UUID>, JpaSpecif
     @Query("UPDATE PtpRecord p SET p.reminderSent = true, p.reminderSentAt = CURRENT_TIMESTAMP WHERE p.id IN :ids")
     int bulkMarkReminderSent(@Param("ids") List<UUID> ids);
 
+    /** SYSTEM 18 TASK 18.4: agentName is a denormalized (encrypted) snapshot of the assigned
+     *  agent's name -- see PtpHistoryRepository#scrubChangedByName's javadoc for why a JPQL bulk
+     *  UPDATE is the right tool here (re-encrypts via the entity converter, not a raw SQL write). */
+    @Modifying
+    @Query("UPDATE PtpRecord p SET p.agentName = :tombstone WHERE p.agentId = :agentId")
+    int scrubAgentName(@Param("agentId") UUID agentId, @Param("tombstone") String tombstone);
+
     @Query("""
         SELECT p FROM PtpRecord p
         WHERE p.agentId = :agentId

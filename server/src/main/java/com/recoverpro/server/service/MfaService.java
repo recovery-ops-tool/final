@@ -17,10 +17,10 @@ public interface MfaService {
 
     void disableMfa(UUID userId, String totpCode);
 
-    /** Whether MFA enrollment is globally enforced (app.security.mfa.enforce). */
-    boolean isEnforced();
-
-    /** Whether this user's roles require MFA enrollment before they may log in. */
+    /** Whether this user must enroll in MFA before they may log in -- true if their
+     *  organization's own mfa_required policy is on (SYSTEM 08 TASK 8.3, checked unconditionally,
+     *  independent of the platform-wide switch below), OR if the platform-wide
+     *  app.security.mfa.enforce switch is on AND their role is in the required-roles list. */
     boolean requiresMfaEnrollment(User user);
 
     /** Stores a short-lived session marker for the "MFA required" login step. */

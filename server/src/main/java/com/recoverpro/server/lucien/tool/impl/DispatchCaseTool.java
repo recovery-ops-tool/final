@@ -57,7 +57,7 @@ public class DispatchCaseTool implements LucienTool {
 
     @Override
     public String execute(JsonNode args, UserPrincipal principal) {
-        orgIsolationGuard.belongsToOrg(principal.getOrganizationId());
+        orgIsolationGuard.assertBelongsToOrg(principal.getOrganizationId());
         boolean isManager = principal.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals(PlatformConstants.ROLE_MANAGER)
                             || a.getAuthority().equals(PlatformConstants.ROLE_TL)

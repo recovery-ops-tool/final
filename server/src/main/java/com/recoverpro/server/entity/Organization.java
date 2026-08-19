@@ -39,6 +39,34 @@ public class Organization {
     @Builder.Default
     private boolean isActive = true;
 
+    // SYSTEM 18 TASK 18.2.c: soft-delete marker. A non-null value starts the retention window --
+    // OrganizationPurgeJob hard-purges the row (and, per RETENTION, everything scoped to it) once
+    // the window elapses. Deliberately separate from isActive: a suspended-but-not-deleted org is
+    // still fully recoverable with one PATCH; a deleted org is on a one-way countdown.
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    @Column(name = "deletion_reason", length = 500)
+    private String deletionReason;
+
+    // SYSTEM 18 TASK 18.2.c: set by OrganizationPurgeJob once the retention window elapses.
+    // Distinct from deletedAt: a soft-deleted-but-not-yet-purged org is still fully restorable
+    // with one PATCH; once purgedAt is set the row has been tombstoned (name/code/contact info
+    // scrubbed and its subscription/feature-flag rows gone) and cannot be restored -- see that
+    // job's javadoc for why the ROW itself still exists rather than being hard-deleted outright
+    // (the audit trail's immutability trigger makes an actual DELETE of a referenced org
+    // impossible by design, not by oversight).
+    @Column(name = "purged_at")
+    private Instant purgedAt;
+
+    /** SYSTEM 08 TASK 8.3: org-admin-controlled MFA enforcement, independent of the platform-wide
+     *  role-based enforcement ({@code app.security.mfa.enforce}/{@code MfaServiceImpl}) -- an org
+     *  opting itself into MFA is a tenant decision, not gated by an unrelated platform config
+     *  flag. See {@code MfaServiceImpl#requiresMfaEnrollment}. */
+    @Column(name = "mfa_required", nullable = false)
+    @Builder.Default
+    private boolean mfaRequired = false;
+
     @Column(name = "lookup_hash_pepper", length = 64)
     private String lookupHashPepper;
 

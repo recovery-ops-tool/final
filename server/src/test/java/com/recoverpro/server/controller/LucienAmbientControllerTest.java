@@ -8,6 +8,7 @@ import com.recoverpro.server.entity.User;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.LucienService;
 import com.recoverpro.server.service.VisitInterviewService;
+import com.recoverpro.server.service.ai.ChatRateLimiter;
 import com.recoverpro.server.service.ai.TranslationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,7 @@ class LucienAmbientControllerTest {
     @Mock private TtsClient ttsClient;
     @Mock private SttClient sttClient;
     @Mock private TranslationService translationService;
+    @Mock private ChatRateLimiter chatRateLimiter;
 
     private LucienController controller;
     private UserPrincipal principal;
@@ -38,7 +40,7 @@ class LucienAmbientControllerTest {
     @BeforeEach
     void setUp() {
         controller = new LucienController(
-                lucienService, visitInterviewService, ttsClient, sttClient, translationService);
+                lucienService, visitInterviewService, ttsClient, sttClient, translationService, chatRateLimiter);
         User user = User.builder().id(UUID.randomUUID()).organizationId(UUID.randomUUID()).build();
         principal = new UserPrincipal(user);
     }

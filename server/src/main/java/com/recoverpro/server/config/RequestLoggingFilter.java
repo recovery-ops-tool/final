@@ -17,7 +17,12 @@ import java.util.regex.Pattern;
 @Order(1)
 public class RequestLoggingFilter implements Filter {
 
-    public static final String MDC_KEY = "reqId";
+    // SYSTEM 13 TASK 13.1: was "reqId" -- src/main/resources/logback-spring.xml's prod JSON
+    // encoder has always requested MDC key "requestId" (includeMdcKeyName), so every prod JSON
+    // log line has been missing its request-correlation field since that encoder was written.
+    // Renaming the constant's value is safe: every other reference in the codebase (AuditServiceImpl)
+    // reads MDC.get(RequestLoggingFilter.MDC_KEY) symbolically, not the literal string.
+    public static final String MDC_KEY = "requestId";
     public static final String HEADER  = "X-Request-Id";
 
     private static final int MAX_INBOUND_ID_LEN = 64;

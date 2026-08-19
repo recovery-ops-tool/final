@@ -10,6 +10,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import com.recoverpro.server.util.ClientIpResolver;
 
 import java.io.IOException;
 import java.util.List;
@@ -42,7 +43,7 @@ public class RefreshTokenRateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String ip  = clientIp(request);
+        String ip  = ClientIpResolver.resolve(request);
         String key = KEY_PREFIX + ip;
 
         try {
@@ -65,9 +66,5 @@ public class RefreshTokenRateLimitFilter extends OncePerRequestFilter {
         }
 
         chain.doFilter(request, response);
-    }
-
-    private String clientIp(HttpServletRequest request) {
-        return request.getRemoteAddr();
     }
 }

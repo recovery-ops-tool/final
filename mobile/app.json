@@ -47,7 +47,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FFFFFF",
-          "image": "./assets/images/log.png",
+          "image": "./assets/images/logo.png",
           "imageWidth": 200
         }
       ],
@@ -73,8 +73,7 @@
           "microphonePermission": "RecoverPro records short audio clips only after you trigger an SOS alert, so your supervisor can hear what's happening.",
           "enableBackgroundPlayback": false
         }
-      ],
-      "@sentry/react-native"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

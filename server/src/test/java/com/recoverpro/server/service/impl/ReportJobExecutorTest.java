@@ -8,6 +8,7 @@ import com.recoverpro.server.repository.ReportJobRepository;
 import com.recoverpro.server.service.AuditService;
 import com.recoverpro.server.service.ExportService;
 import com.recoverpro.server.service.NotificationService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,10 +34,13 @@ class ReportJobExecutorTest {
     @Mock private AuditService auditService;
 
     private ReportJobExecutor executor;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
-        executor = new ReportJobExecutor(reportJobRepository, exportService, notificationService, auditService);
+        meterRegistry = new SimpleMeterRegistry();
+        executor = new ReportJobExecutor(
+                reportJobRepository, exportService, notificationService, auditService, meterRegistry);
     }
 
     @Test
@@ -63,6 +67,11 @@ class ReportJobExecutorTest {
 
         ArgumentCaptor<ReportJob> captor = ArgumentCaptor.forClass(ReportJob.class);
         verify(reportJobRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+
+        // SYSTEM 12 TASK 12.2: report_generation_duration_seconds appears in the registry.
+        assertThat(meterRegistry.get("report_generation_duration_seconds")
+                .tag("reportType", "COLLECTION_EFFICIENCY").tag("format", "PDF").tag("outcome", "success")
+                .timer().count()).isEqualTo(1L);
     }
 
     @Test

@@ -42,4 +42,7 @@ public interface ReportJobRepository extends JpaRepository<ReportJob, UUID> {
     Optional<ReportJob> findById(UUID jobId);
 
     boolean existsByRequestedByAndStatusIn(UUID requestedBy, Collection<ReportStatus> statuses);
+
+    /** TASK 20.4: live count for the monthly report-generation entitlement cap. */
+    long countByOrganizationIdAndCreatedAtAfter(UUID organizationId, java.time.Instant since);
 }

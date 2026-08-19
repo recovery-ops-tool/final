@@ -88,9 +88,27 @@ public class AuditServiceImpl implements AuditService {
         return up;
     }
 
+    /**
+     * SYSTEM 10 TASK 10.4 (found while writing a real integration test, not a mock): this used to
+     * join EVERY granted authority -- role names AND every permission name each role carries
+     * ({@code UserPrincipal#buildAuthorities}) -- into {@code actor_role VARCHAR(100)}. That
+     * column's own javadoc says it's "a snapshot of the role name," but permission names aren't
+     * ROLE_-prefixed in this schema (confirmed against the real seed data: e.g. {@code CASE_ASSIGN},
+     * not a role), so the unfiltered join massively overshot 100 chars for any role with a
+     * meaningful permission set -- FO alone is 137 chars, ORG_ADMIN 329, PLATFORM_ADMIN 456.
+     * EVERY audited action by an FO/TL/MANAGER/ORG_ADMIN/PLATFORM_ADMIN principal (i.e. almost all
+     * of them) was throwing {@code DataException: value too long for type character varying(100)}
+     * on the INSERT -- and since {@link #record} runs in its own REQUIRES_NEW transaction with no
+     * caller catching the exception (confirmed: none of the ~20 call sites do), that failure
+     * propagated all the way to a 500 response for whatever the caller was actually trying to do
+     * (login, an RBAC change, a platform-admin action, ...), not just a lost audit row. Filtering
+     * to ROLE_-prefixed authorities restores the field's actual documented contract and, as a side
+     * effect, fixes the overflow for every realistic role/permission combination.
+     */
     private static String joinRoles(UserPrincipal principal) {
         String roles = principal.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
+                .filter(a -> a.startsWith("ROLE_"))
                 .collect(Collectors.joining(","));
         return roles.isEmpty() ? null : roles;
     }

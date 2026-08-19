@@ -21,7 +21,6 @@ export interface CreateOrganizationRequest {
   adminEmail: string;
   adminFirstName: string;
   adminLastName: string;
-  adminPassword: string;
 }
 
 export interface UpdateOrganizationRequest {

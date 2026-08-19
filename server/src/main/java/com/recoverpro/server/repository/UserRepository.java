@@ -29,6 +29,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     List<User> findByOrganizationId(UUID organizationId);
 
+    @Query("SELECT u.email FROM User u WHERE u.organizationId = :orgId")
+    List<String> findEmailsByOrganizationId(@Param("orgId") UUID orgId);
+
+    @Query("SELECT u FROM User u WHERE u.organizationId = :orgId AND u.lastLoginAt IS NULL AND u.enabled = true ORDER BY u.createdAt DESC")
+    List<User> findPendingInvitesByOrganizationId(@Param("orgId") UUID orgId);
+
     Page<User> findByOrganizationIdOrderByCreatedAtDesc(UUID organizationId, Pageable pageable);
 
     Page<User> findAllByOrderByCreatedAtDesc(Pageable pageable);

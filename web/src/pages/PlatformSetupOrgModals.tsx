@@ -10,8 +10,8 @@ import { AlertCircle, Trash2, Loader2 } from 'lucide-react';
 import { Modal, ModalFooter, FormSection, Input } from './PlatformSetupShared';
 
 export function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; onCreated: (org: OrganizationSummary) => void }) {
-  const [form, setForm] = useState<CreateOrganizationRequest & { confirmPassword: string }>({
-    name: '', code: '', adminEmail: '', adminFirstName: '', adminLastName: '', adminPassword: '', confirmPassword: '',
+  const [form, setForm] = useState<CreateOrganizationRequest>({
+    name: '', code: '', adminEmail: '', adminFirstName: '', adminLastName: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,8 +26,6 @@ export function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; on
     if (!form.adminFirstName.trim()) e.adminFirstName = 'Required';
     if (!form.adminLastName.trim()) e.adminLastName = 'Required';
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.adminEmail.trim())) e.adminEmail = 'Invalid email';
-    if (form.adminPassword.length < 8) e.adminPassword = 'Minimum 8 characters';
-    if (form.adminPassword !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
     setFieldErr(e); return Object.keys(e).length === 0;
   };
 
@@ -35,11 +33,10 @@ export function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; on
     if (!validate()) return;
     setSubmitting(true); setError(null);
     try {
-      const { confirmPassword: _, ...payload } = form;
       const org = await platformApi.createOrganization({
-        ...payload, code: payload.code.toUpperCase(), adminEmail: payload.adminEmail.toLowerCase().trim(),
+        ...form, code: form.code.toUpperCase(), adminEmail: form.adminEmail.toLowerCase().trim(),
       });
-      toastBus.success('Organization created', `${org.name} is ready.`);
+      toastBus.success('Organization created', `${org.name} is ready. A welcome email with sign-in instructions was sent to the admin.`);
       onCreated(org);
     } catch (e: any) {
       setError(e?.response?.data?.message || 'Failed to create organization');
@@ -57,9 +54,7 @@ export function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; on
           <Input label="First name" value={form.adminFirstName} onChange={v => set('adminFirstName', v)} error={fieldErr.adminFirstName} required />
           <Input label="Last name" value={form.adminLastName} onChange={v => set('adminLastName', v)} error={fieldErr.adminLastName} required />
         </div>
-        <Input label="Email" type="email" value={form.adminEmail} onChange={v => set('adminEmail', v)} error={fieldErr.adminEmail} placeholder="admin@org.com" required />
-        <Input label="Password" type="password" value={form.adminPassword} onChange={v => set('adminPassword', v)} error={fieldErr.adminPassword} hint="Min 8 characters — share with the admin out-of-band." required />
-        <Input label="Confirm password" type="password" value={form.confirmPassword} onChange={v => set('confirmPassword', v)} error={fieldErr.confirmPassword} required />
+        <Input label="Email" type="email" value={form.adminEmail} onChange={v => set('adminEmail', v)} error={fieldErr.adminEmail} placeholder="admin@org.com" hint="They'll receive a welcome email with a one-time code to set their own password." required />
       </FormSection>
       {error && (
         <div className="ps-banner is-error" style={{ margin: 0 }}>

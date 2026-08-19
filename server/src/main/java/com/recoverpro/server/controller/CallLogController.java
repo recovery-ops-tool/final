@@ -9,6 +9,7 @@ import com.recoverpro.server.dto.response.CallLogResponse;
 import com.recoverpro.server.dto.response.CallStartResponse;
 import com.recoverpro.server.enums.CallOutcome;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.CallLogService;
 import jakarta.validation.Valid;
@@ -41,8 +42,7 @@ import java.util.UUID;
 public class CallLogController {
 
     private static final String SUBMITTERS = "hasAnyRole('FO','CALLER')";
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
+    private static final String READERS = Authz.ALL_STAFF;
 
     private final CallLogService callLogService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
@@ -122,7 +122,7 @@ public class CallLogController {
     }
 
     @GetMapping("/{id}/recording")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','MANAGER','TL','PLATFORM_ADMIN')")
+    @PreAuthorize(Authz.LEADS)
     public ResponseEntity<Resource> downloadRecording(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

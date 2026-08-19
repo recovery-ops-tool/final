@@ -1,9 +1,11 @@
 package com.recoverpro.server.service.impl;
 
 import com.recoverpro.server.entity.MfaRecoveryCode;
+import com.recoverpro.server.entity.Organization;
 import com.recoverpro.server.entity.Role;
 import com.recoverpro.server.entity.User;
 import com.recoverpro.server.repository.MfaRecoveryCodeRepository;
+import com.recoverpro.server.repository.OrganizationRepository;
 import com.recoverpro.server.repository.UserRepository;
 import com.recoverpro.server.security.totp.TotpService;
 import com.recoverpro.server.service.AuditService;
@@ -38,6 +40,7 @@ import static org.mockito.Mockito.when;
 class MfaServiceImplTest {
 
     @Mock private UserRepository userRepository;
+    @Mock private OrganizationRepository organizationRepository;
     @Mock private MfaRecoveryCodeRepository mfaRecoveryCodeRepository;
     @Mock private TotpService totpService;
     @Mock private StringRedisTemplate redisTemplate;
@@ -52,8 +55,8 @@ class MfaServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new MfaServiceImpl(userRepository, mfaRecoveryCodeRepository, totpService,
-                redisTemplate, rateLimiter, auditLogService, auditService, passwordEncoder);
+        service = new MfaServiceImpl(userRepository, organizationRepository, mfaRecoveryCodeRepository,
+                totpService, redisTemplate, rateLimiter, auditLogService, auditService, passwordEncoder);
         userId = UUID.randomUUID();
     }
 
@@ -108,7 +111,8 @@ class MfaServiceImplTest {
     }
 
     @Test
-    void requiresMfaEnrollment_userHasRequiredRole_returnsTrue() {
+    void requiresMfaEnrollment_userHasRequiredRoleAndGloballyEnforced_returnsTrue() {
+        setField("mfaEnforce", true);
         setField("mfaRequiredRolesCsv", "ROLE_PLATFORM_ADMIN,ROLE_ORG_ADMIN");
         Role adminRole = Role.builder().name("ROLE_ORG_ADMIN").build();
         User user = User.builder().id(userId).roles(Set.of(adminRole)).build();
@@ -118,11 +122,60 @@ class MfaServiceImplTest {
 
     @Test
     void requiresMfaEnrollment_userWithoutRequiredRole_returnsFalse() {
+        setField("mfaEnforce", true);
         setField("mfaRequiredRolesCsv", "ROLE_PLATFORM_ADMIN,ROLE_ORG_ADMIN");
         Role fo = Role.builder().name("ROLE_FO").build();
         User user = User.builder().id(userId).roles(Set.of(fo)).build();
 
         assertThat(service.requiresMfaEnrollment(user)).isFalse();
+    }
+
+    /** SYSTEM 08 TASK 8.3: the platform-wide switch being OFF must not silently disable an org's
+     *  OWN, independently-chosen MFA policy -- these two decisions are unrelated. */
+    @Test
+    void requiresMfaEnrollment_roleMatchesButGlobalSwitchOff_returnsFalse() {
+        setField("mfaEnforce", false);
+        setField("mfaRequiredRolesCsv", "ROLE_PLATFORM_ADMIN,ROLE_ORG_ADMIN");
+        Role adminRole = Role.builder().name("ROLE_ORG_ADMIN").build();
+        User user = User.builder().id(userId).roles(Set.of(adminRole)).build();
+
+        assertThat(service.requiresMfaEnrollment(user)).isFalse();
+    }
+
+    /* ── SYSTEM 08 TASK 8.3: org-level MFA-required policy ───────────────────── */
+
+    @Test
+    void requiresMfaEnrollment_orgRequiresMfa_returnsTrueRegardlessOfGlobalSwitchOrRole() {
+        setField("mfaEnforce", false); // platform-wide switch OFF -- must not matter here
+        UUID orgId = UUID.randomUUID();
+        Role fo = Role.builder().name("ROLE_FO").build(); // not in any required-roles list either
+        User user = User.builder().id(userId).organizationId(orgId).roles(Set.of(fo)).build();
+        when(organizationRepository.findById(orgId)).thenReturn(
+                java.util.Optional.of(Organization.builder().id(orgId).mfaRequired(true).build()));
+
+        assertThat(service.requiresMfaEnrollment(user)).isTrue();
+    }
+
+    @Test
+    void requiresMfaEnrollment_orgDoesNotRequireMfa_fallsThroughToRoleCheck() {
+        setField("mfaEnforce", true);
+        setField("mfaRequiredRolesCsv", "ROLE_PLATFORM_ADMIN,ROLE_ORG_ADMIN");
+        UUID orgId = UUID.randomUUID();
+        Role adminRole = Role.builder().name("ROLE_ORG_ADMIN").build();
+        User user = User.builder().id(userId).organizationId(orgId).roles(Set.of(adminRole)).build();
+        when(organizationRepository.findById(orgId)).thenReturn(
+                java.util.Optional.of(Organization.builder().id(orgId).mfaRequired(false).build()));
+
+        assertThat(service.requiresMfaEnrollment(user)).isTrue();
+    }
+
+    @Test
+    void requiresMfaEnrollment_platformAdminNoOrganization_neverCallsOrganizationLookup() {
+        setField("mfaEnforce", false);
+        User platformAdmin = User.builder().id(userId).organizationId(null).roles(Set.of()).build();
+
+        assertThat(service.requiresMfaEnrollment(platformAdmin)).isFalse();
+        verify(organizationRepository, never()).findById(any());
     }
 
     private void setField(String name, Object value) {

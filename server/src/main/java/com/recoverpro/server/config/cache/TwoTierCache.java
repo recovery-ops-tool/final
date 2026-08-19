@@ -43,25 +43,30 @@ public class TwoTierCache implements Cache {
         return l2val;
     }
 
+    /**
+     * TASK 15.3: routed through the native Caffeine cache's atomic get-or-compute rather than the
+     * separate l1.get()/valueLoader.call()/put() steps above, so N callers racing on the same cold
+     * key (only reachable when {@code @Cacheable(sync = true)}) block on one in-flight computation
+     * instead of each independently missing L1, missing L2, and invoking valueLoader.
+     */
     @Override
     @Nullable
     @SuppressWarnings("unchecked")
     public <T> T get(Object key, Callable<T> valueLoader) {
-        T v = l1.get(key, (Class<T>) null);
-        if (v != null) return v;
-        T l2val = l2Read(key, () -> l2 != null ? l2.get(key, (Class<T>) null) : null);
-        if (l2val != null) {
-            l1.put(key, l2val);
-            return l2val;
-        }
-        T loaded;
-        try {
-            loaded = valueLoader.call();
-        } catch (Exception e) {
-            throw new ValueRetrievalException(key, valueLoader, e);
-        }
-        put(key, loaded);
-        return loaded;
+        com.github.benmanes.caffeine.cache.Cache<Object, Object> nativeL1 =
+                (com.github.benmanes.caffeine.cache.Cache<Object, Object>) l1.getNativeCache();
+        return (T) nativeL1.get(key, k -> {
+            ValueWrapper l2hit = l2Read(k, () -> l2 != null ? l2.get(k) : null);
+            if (l2hit != null) return l2hit.get();
+            Object loaded;
+            try {
+                loaded = valueLoader.call();
+            } catch (Exception e) {
+                throw new ValueRetrievalException(k, valueLoader, e);
+            }
+            if (loaded != null && l2 != null) l2.put(k, loaded);
+            return loaded;
+        });
     }
 
     @Override

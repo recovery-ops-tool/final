@@ -4,6 +4,7 @@ import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
 import com.recoverpro.server.dto.response.AllocationResponse;
 import com.recoverpro.server.dto.response.CaseTimelineResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.AllocationService;
 import com.recoverpro.server.service.CaseTimelineService;
@@ -23,8 +24,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CasesController {
 
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
+    private static final String READERS = Authz.ALL_STAFF;
 
     private final CaseTimelineService caseTimelineService;
     private final AllocationService allocationService;

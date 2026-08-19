@@ -1,0 +1,20 @@
+# SYSTEM 06 TASK 6.3.c: documented suppressions for confirmed false positives found by running
+# gitleaks against this repo's real history (server/.env itself was checked separately and
+# confirmed never committed -- see docs/SYSTEM-06-CI-CD.md). Each entry below is a specific
+# commit:file:rule:line fingerprint, not a broad path/pattern exclusion, so a genuinely new secret
+# added later in either of these files still gets caught.
+#
+# Revisit if: DefaultSystemPrompt.java's AMBIENT_KEY constant is ever renamed to something with
+# higher entropy (unlikely to trip the same rule then), or server/.env.example's JWT_SECRET/
+# JWT_EXPIRATION_MS lines are restructured (the false match is a multi-line regex artifact of the
+# empty "JWT_SECRET=" line being immediately followed by "JWT_EXPIRATION_MS=3600000").
+
+# AMBIENT_KEY = "LUCIEN_AMBIENT_VISIT_V1" -- a lookup-key constant name, not a secret.
+c398162c8c95640d8c158a6f2c856227a6bc60a9:docs/superpowers/plans/2026-08-10-lucien-ambient-voice.md:generic-api-key:445
+ecc5adb52ec4ec99daca58160af1aa6d4346ca7b:server/src/main/java/com/recoverpro/server/prompt/DefaultSystemPrompt.java:generic-api-key:75
+
+# server/.env.example's placeholder template -- JWT_SECRET= is deliberately blank, and
+# JWT_EXPIRATION_MS=3600000 (a plain millisecond duration, not a credential) only matches because
+# gitleaks' generic-api-key rule looks at the line following a "*_SECRET=" key.
+77f04f288199993e59a885542b06bc0908d73558:server/.env.example:generic-api-key:59
+25d061ddbf341e81e09271a77469dda56894f5bc:server/.env.example:generic-api-key:45

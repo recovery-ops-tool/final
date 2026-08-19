@@ -1,5 +1,7 @@
 package com.recoverpro.server.security.jwt;
 
+import com.recoverpro.server.security.AccessDenialAuditor;
+import com.recoverpro.server.security.UserPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +31,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserDetailsService userDetailsService;
     private final StringRedisTemplate redisTemplate;
     private final SseTicketService sseTicketService;
+    private final AccessDenialAuditor accessDenialAuditor;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -60,13 +63,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         if (blacklistCheck == BlacklistCheck.BLACKLISTED) {
             log.warn("Blocked request with blacklisted JWT from {}", clientIp(request));
-            writeUnauthorized(response, "Token has been revoked");
+            writeUnauthorized(request, response, "Token has been revoked");
             return;
         }
 
         try {
             String username = jwtTokenProvider.extractUsername(token);
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+            if (userDetails instanceof UserPrincipal principal && !principal.isOrganizationActive()) {
+                log.warn("Blocked request from suspended-organization user {}", principal.getId());
+                writeOrganizationSuspended(request, response, principal.getId());
+                return;
+            }
 
             var authentication = new UsernamePasswordAuthenticationToken(
                     userDetails, null, userDetails.getAuthorities());
@@ -77,7 +86,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         } catch (UsernameNotFoundException e) {
             log.warn("User not found for token: {}", e.getMessage());
-            writeUnauthorized(response, "Invalid credentials");
+            writeUnauthorized(request, response, "Invalid credentials");
         } catch (Exception e) {
             log.error("Authentication error from {}: {}", clientIp(request), e.getMessage(), e);
             if (!response.isCommitted()) {
@@ -103,18 +112,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                        FilterChain filterChain) throws ServletException, IOException {
         String username = sseTicketService.redeemTicket(request.getParameter("ticket"));
         if (username == null) {
-            writeUnauthorized(response, "Invalid or expired stream ticket");
+            writeUnauthorized(request, response, "Invalid or expired stream ticket");
             return;
         }
         try {
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+            if (userDetails instanceof UserPrincipal principal && !principal.isOrganizationActive()) {
+                writeOrganizationSuspended(request, response, principal.getId());
+                return;
+            }
             var authentication = new UsernamePasswordAuthenticationToken(
                     userDetails, null, userDetails.getAuthorities());
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
         } catch (UsernameNotFoundException e) {
-            writeUnauthorized(response, "Invalid credentials");
+            writeUnauthorized(request, response, "Invalid credentials");
         }
     }
 
@@ -139,12 +152,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
-    private void writeUnauthorized(HttpServletResponse response, String message) throws IOException {
+    // SYSTEM 09 TASK 9.4.b: these three rejections short-circuit before Spring Security's own
+    // exception translation ever runs (they return here directly instead of throwing or calling
+    // filterChain.doFilter), so RestAuthenticationEntryPoint never sees them -- without auditing
+    // here too, a blacklisted-token replay or a token for a since-deleted user would be a 401
+    // with zero audit trail, the same gap 9.4.b exists to close.
+    private void writeUnauthorized(HttpServletRequest request, HttpServletResponse response, String message)
+            throws IOException {
         if (!response.isCommitted()) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
             response.getWriter().write("{\"error\":\"" + message + "\",\"status\":401}");
         }
+        accessDenialAuditor.recordUnauthorized(request, message);
+    }
+
+    // SYSTEM 18 TASK 18.2.b: 403, not 401 -- the token is valid and belongs to a real, enabled
+    // account; access is denied because the org it belongs to is suspended, not because the
+    // caller failed to authenticate. Mirrors AccountDisabledException's FORBIDDEN semantics.
+    private void writeOrganizationSuspended(HttpServletRequest request, HttpServletResponse response,
+                                            java.util.UUID actorUserId) throws IOException {
+        if (!response.isCommitted()) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"error\":\"Organization Suspended\","
+                    + "\"message\":\"Your organization's access has been suspended. Contact your administrator.\","
+                    + "\"status\":403}");
+        }
+        accessDenialAuditor.recordAccessDenied(request, actorUserId, "Organization suspended");
     }
 
     private void writeServiceUnavailable(HttpServletResponse response, String message) throws IOException {

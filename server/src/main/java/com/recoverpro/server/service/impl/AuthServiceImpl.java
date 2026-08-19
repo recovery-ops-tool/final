@@ -16,6 +16,7 @@ import com.recoverpro.server.enums.AuditResourceType;
 import com.recoverpro.server.enums.AuditResult;
 import com.recoverpro.server.exception.*;
 import com.recoverpro.server.mapper.UserMapper;
+import com.recoverpro.server.repository.OrganizationRepository;
 import com.recoverpro.server.repository.RefreshTokenRepository;
 import com.recoverpro.server.repository.UserRepository;
 import com.recoverpro.server.service.AuditEventRequest;
@@ -57,6 +58,7 @@ import java.util.concurrent.TimeUnit;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
+    private final OrganizationRepository organizationRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final RateLimiter rateLimiter;
@@ -109,6 +111,12 @@ public class AuthServiceImpl implements AuthService {
         redisTemplate.delete(USER_PROFILE_CACHE_PREFIX + userId);
     }
 
+    private boolean isOrganizationActive(UUID organizationId) {
+        return organizationRepository.findById(organizationId)
+                .map(org -> org.isActive() && org.getDeletedAt() == null)
+                .orElse(true);
+    }
+
     @Override
     public AuthResponse login(LoginRequest request, HttpServletRequest httpRequest) {
         String ip = ClientIpResolver.resolve(httpRequest);
@@ -138,7 +146,21 @@ public class AuthServiceImpl implements AuthService {
             throw new InvalidCredentialsException("Invalid email or password");
         }
 
-        if (!user.isEnabled()) throw new AccountDisabledException("Account is disabled");
+        if (!user.isEnabled()) {
+            // SYSTEM 08 TASK 8.4.b: was thrown with zero audit trail at all -- a disabled-account
+            // login attempt (e.g. an offboarded employee's credentials still being used) is exactly
+            // the kind of event an investigation needs to find, same as every other rejection
+            // branch in this method already produces one.
+            auditLogService.logUserAction(user.getId(), "LOGIN_FAILED", "Account disabled, IP: " + ip);
+            auditLoginFailure(user.getId(), "Account disabled");
+            throw new AccountDisabledException("Account is disabled");
+        }
+        if (user.getOrganizationId() != null && !isOrganizationActive(user.getOrganizationId())) {
+            auditLogService.logUserAction(user.getId(), "LOGIN_BLOCKED", "Organization suspended, IP: " + ip);
+            auditLoginFailure(user.getId(), "Organization suspended");
+            throw new OrganizationSuspendedException(
+                    "Your organization's access has been suspended. Contact your administrator.");
+        }
         if (user.isCurrentlyLocked()) {
             long retryAfter = computeLockoutRetryAfter(user);
             auditLogService.logUserAction(user.getId(), "LOGIN_FAILED", "Account locked from IP: " + ip);
@@ -146,7 +168,7 @@ public class AuthServiceImpl implements AuthService {
             throw new AccountLockedException("Account locked. Try again in " + retryAfter + "s", retryAfter);
         }
 
-        if (mfaService.isEnforced() && mfaService.requiresMfaEnrollment(user) && !user.isMfaEnabled()) {
+        if (mfaService.requiresMfaEnrollment(user) && !user.isMfaEnabled()) {
             auditLogService.logUserAction(user.getId(), "LOGIN_BLOCKED", "MFA enrollment required");
             auditLoginFailure(user.getId(), "MFA enrollment required");
             throw new MfaSetupRequiredException("MFA enrollment is required for this account.");
@@ -163,12 +185,23 @@ public class AuthServiceImpl implements AuthService {
 
             if (hasRecoveryCode) {
                 if (!mfaService.redeemRecoveryCode(user.getId(), request.getRecoveryCode())) {
+                    // SYSTEM 08 TASK 8.4.b: was unaudited -- an MFA failure at login is a
+                    // security-relevant event on its own, distinct from the password check.
+                    // Audited BEFORE handleFailedAttempt(), which can itself throw
+                    // AccountLockedException (crossing the lockout threshold) -- auditing after
+                    // would silently skip this row on exactly that path.
+                    auditLogService.logUserAction(user.getId(), "LOGIN_FAILED",
+                            "Invalid recovery code from IP: " + ip);
+                    auditLoginFailure(user.getId(), "Invalid recovery code");
                     handleFailedAttempt(user);
                     throw new InvalidTotpException("Invalid or already-used recovery code");
                 }
                 log.info("MFA recovery code redeemed for user {}", user.getId());
             } else {
                 if (!mfaService.verifyTotpForLogin(user.getId(), user.getMfaSecret(), request.getTotpCode())) {
+                    auditLogService.logUserAction(user.getId(), "LOGIN_FAILED",
+                            "Invalid TOTP code from IP: " + ip);
+                    auditLoginFailure(user.getId(), "Invalid TOTP code");
                     handleFailedAttempt(user);
                     throw new InvalidTotpException("Invalid TOTP code");
                 }
@@ -221,6 +254,11 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void revokeSession(UUID userId, UUID sessionId) {
         refreshTokenRotationService.revokeSession(userId, sessionId);
+    }
+
+    @Override
+    public int revokeOtherSessions(UUID userId, String currentDeviceId) {
+        return refreshTokenRotationService.revokeOtherSessions(userId, currentDeviceId);
     }
 
     @Override
@@ -310,6 +348,19 @@ public class AuthServiceImpl implements AuthService {
             user.setFailedLoginAttempts(0);
             userRepository.save(user);
             emailService.sendAccountLockedAlert(user.getEmail());
+            // SYSTEM 08 TASK 8.4.b: distinct from the "rejected because ALREADY locked" audit row
+            // (login()'s isCurrentlyLocked() branch) -- this is the transition itself, the moment
+            // lockout engages, regardless of which of the three call sites (password, TOTP,
+            // recovery code) triggered it.
+            auditLogService.logUserAction(user.getId(), "ACCOUNT_LOCKED",
+                    "Account locked for " + backoffMinutes + " minutes after repeated failures");
+            auditService.record(AuditEventRequest.builder()
+                    .action(AuditAction.AUTH_LOGIN_FAILED)
+                    .resourceType(AuditResourceType.USER)
+                    .resourceId(user.getId().toString())
+                    .result(AuditResult.DENIED)
+                    .reason("Account locked after repeated failed attempts")
+                    .build());
             throw new AccountLockedException("Account locked for " + backoffMinutes + " minutes",
                     backoffMinutes * 60);
         }

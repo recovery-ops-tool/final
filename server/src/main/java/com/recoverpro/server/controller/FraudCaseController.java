@@ -1,11 +1,13 @@
 package com.recoverpro.server.controller;
 
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.dto.request.CreateFraudCaseRequest;
 import com.recoverpro.server.dto.request.TransitionFraudCaseRequest;
 import com.recoverpro.server.dto.response.FraudCaseResponse;
 import com.recoverpro.server.enums.FraudCaseStatus;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.FraudCaseService;
 import com.recoverpro.server.service.UserActionAuditService;
@@ -41,8 +43,10 @@ public class FraudCaseController {
     private final FraudCaseService fraudCaseService;
     private final UserActionAuditService auditLogService;
 
+    private static final String ADMINS = Authz.ADMINS;
+
     @PostMapping
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<FraudCaseResponse>> create(
             @Valid @RequestBody CreateFraudCaseRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -52,7 +56,7 @@ public class FraudCaseController {
     }
 
     @PatchMapping("/{id}/transition")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<FraudCaseResponse>> transition(
             @PathVariable UUID id,
             @Valid @RequestBody TransitionFraudCaseRequest request,
@@ -62,7 +66,7 @@ public class FraudCaseController {
     }
 
     @PostMapping("/{id}/cfr-lookup")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<FraudCaseResponse>> cfrLookup(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -72,7 +76,7 @@ public class FraudCaseController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<FraudCaseResponse>> getById(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -83,14 +87,15 @@ public class FraudCaseController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<PagedResponse<FraudCaseResponse>>> list(
             @RequestParam UUID orgId,
             @RequestParam(required = false) FraudCaseStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Page<FraudCaseResponse> result = fraudCaseService.list(
-                orgId, status, PageRequest.of(page, size, Sort.by("reportedAt").descending()));
+                orgId, status, PageRequest.of(page, size,
+                        SafeSort.withIdTiebreaker(Sort.by("reportedAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 }

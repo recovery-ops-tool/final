@@ -1,5 +1,6 @@
 package com.recoverpro.server.controller;
 
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
@@ -14,6 +15,7 @@ import com.recoverpro.server.dto.response.DataErasureRequestResponse;
 import com.recoverpro.server.dto.response.NomineeResponse;
 import com.recoverpro.server.enums.ConsentPurpose;
 import com.recoverpro.server.enums.ConsentScope;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.BorrowerService;
 import com.recoverpro.server.service.ConsentService;
@@ -41,8 +43,11 @@ public class BorrowerController {
     private final BorrowerService borrowerService;
     private final ConsentService consentService;
 
+    private static final String ADMINS = Authz.ADMINS;
+    private static final String READERS = Authz.FO_AND_ADMINS;
+
     @PostMapping
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<BorrowerResponse>> create(
             @Valid @RequestBody CreateBorrowerRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -50,24 +55,24 @@ public class BorrowerController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<BorrowerResponse>> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(borrowerService.getById(id)));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<PagedResponse<BorrowerResponse>>> list(
             @RequestParam UUID orgId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Page<BorrowerResponse> result = borrowerService.list(orgId,
-                PageRequest.of(page, size, Sort.by("createdAt").descending()));
+                PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("createdAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 
     @PostMapping("/{id}/consent")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<ConsentArtifactResponse>> grantConsent(
             @PathVariable UUID id,
             @Valid @RequestBody GrantConsentRequest request,
@@ -79,7 +84,7 @@ public class BorrowerController {
     }
 
     @DeleteMapping("/{id}/consent/{purpose}/{scope}")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<Void>> revokeConsent(
             @PathVariable UUID id,
             @PathVariable ConsentPurpose purpose,
@@ -90,13 +95,13 @@ public class BorrowerController {
     }
 
     @GetMapping("/{id}/consents")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<List<ConsentArtifactResponse>>> listConsents(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(consentService.listForBorrower(id)));
     }
 
     @PostMapping("/{id}/erasure-request")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<DataErasureRequestResponse>> requestErasure(
             @PathVariable UUID id,
             @Valid @RequestBody CreateErasureRequestRequest request,
@@ -107,18 +112,18 @@ public class BorrowerController {
     }
 
     @GetMapping("/{id}/erasure-requests")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<List<DataErasureRequestResponse>>> listErasureRequests(
             @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(borrowerService.listErasureRequests(id)));
     }
 
     @PatchMapping("/{id}/erasure-requests/{requestId}/execute")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<DataErasureRequestResponse>> executeErasure(
             @PathVariable UUID id,
             @PathVariable UUID requestId,
-            @RequestBody(required = false) ExecuteErasureRequest request,
+            @Valid @RequestBody(required = false) ExecuteErasureRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         DataErasureRequestResponse result = borrowerService.executeErasure(
                 requestId, principal.getId(), request != null ? request.getComplianceNotes() : null);
@@ -129,7 +134,7 @@ public class BorrowerController {
     }
 
     @PostMapping("/{id}/nominee")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<NomineeResponse>> upsertNominee(
             @PathVariable UUID id,
             @Valid @RequestBody UpsertNomineeRequest request) {
@@ -138,7 +143,7 @@ public class BorrowerController {
     }
 
     @GetMapping("/{id}/nominee")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<NomineeResponse>> getNominee(@PathVariable UUID id) {
         return borrowerService.getNominee(id)
                 .map(n -> ResponseEntity.ok(ApiResponse.success(n)))

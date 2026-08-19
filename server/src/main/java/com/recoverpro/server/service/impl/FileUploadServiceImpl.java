@@ -12,6 +12,7 @@ import com.recoverpro.server.enums.FileUploadStatus;
 import com.recoverpro.server.enums.UploadType;
 import com.recoverpro.server.mapper.FileProcessingErrorMapper;
 import com.recoverpro.server.mapper.FileUploadMapper;
+import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.repository.AllocationRepository;
 import com.recoverpro.server.repository.FileProcessingErrorRepository;
 import com.recoverpro.server.repository.FileUploadRepository;
@@ -46,6 +47,7 @@ public class FileUploadServiceImpl implements FileUploadService {
     private final FileStorageService fileStorageService;
     private final UserActionAuditService auditLogService;
     private final AuditService auditService;
+    private final EntitlementService entitlementService;
 
     @Override
     @Transactional
@@ -53,6 +55,18 @@ public class FileUploadServiceImpl implements FileUploadService {
                                              UploadType uploadType, boolean historicalImport) {
         log.info("Initiating {} upload for organization: {}, file: {}",
                 uploadType, organizationId, file.getOriginalFilename());
+
+        // TASK 20.4: checked before validateFile()'s own work (and well before the expensive
+        // hash/store/process steps below) -- a plan-limit rejection should be the cheapest possible
+        // failure, not the last one.
+        if (!entitlementService.canUploadFile(organizationId)) {
+            throw new BusinessException(
+                    "Monthly file upload limit reached for this organization's plan. Upgrade your plan or contact support.");
+        }
+        if (!entitlementService.canUseStorage(organizationId, file.getSize())) {
+            throw new BusinessException(
+                    "Storage limit reached for this organization's plan. Delete old files, upgrade your plan, or contact support.");
+        }
 
         fileValidationService.validateFile(file);
         String sha256Hash = fileValidationService.computeSha256Hash(file);

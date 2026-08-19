@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ClipboardCheck, Clock, Coins,
   FileDown, FileText, HandCoins, Handshake, History, Landmark,
-  MailWarning, MapPin, MessageSquare, MessageSquareWarning, Pencil, RefreshCw, Repeat, ShieldAlert, ShieldOff,
+  MailWarning, MapPin, MessageSquare, MessageSquareWarning, Pencil, Phone, RefreshCw, Repeat, ShieldAlert, ShieldOff,
   Table as TableIcon, UserCheck, UserPlus, UserX, XCircle,
 } from 'lucide-react';
 import type { CaseEventType } from '../types';
@@ -29,6 +29,8 @@ export const STYLES: Record<CaseEventType, EventStyle> = {
   VISIT_LOGGED:              { icon: MapPin,            accent: 'var(--success)',  label: 'Visit' },
   VISIT_APPROVED:            { icon: CheckCircle2,      accent: 'var(--success)',  label: 'Visit OK' },
   VISIT_REJECTED:            { icon: XCircle,           accent: 'var(--error, #dc2626)',   label: 'Visit rejected' },
+
+  CALL_MADE:                 { icon: Phone,             accent: '#0d9488',                 label: 'Call' },
 
   PTP_CREATED:               { icon: HandCoins,         accent: '#7c3aed',                 label: 'PTP' },
   PTP_FULFILLED:             { icon: CheckCircle2,      accent: '#7c3aed',                 label: 'PTP kept' },

@@ -9,6 +9,7 @@ import com.recoverpro.server.repository.ChatSessionRepository;
 import com.recoverpro.server.repository.PasswordResetTokenRepository;
 import com.recoverpro.server.repository.RefreshTokenRepository;
 import com.recoverpro.server.repository.UserRepository;
+import com.recoverpro.server.service.OpsAlertService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,6 +38,7 @@ public class MaintenanceScheduler {
     private final ChatMessageRepository chatMessageRepository;
     private final AgentShiftRepository agentShiftRepository;
     private final AppNotificationRepository appNotificationRepository;
+    private final OpsAlertService opsAlertService;
 
     @Value("${lucien.sessions.max-age-days:90}")
     private int sessionMaxAgeDays;
@@ -50,19 +52,33 @@ public class MaintenanceScheduler {
     @Scheduled(cron = "0 0 * * * *")
     @Transactional
     public void purgeExpiredTokens() {
-        Instant now = Instant.now();
-        refreshTokenRepository.deleteExpiredTokens(now);
-        int otpDeleted = passwordResetTokenRepository.deleteExpired(now);
-        log.info("Token cleanup: OTPs removed={}", otpDeleted);
+        try {
+            Instant now = Instant.now();
+            refreshTokenRepository.deleteExpiredTokens(now);
+            int otpDeleted = passwordResetTokenRepository.deleteExpired(now);
+            log.info("Token cleanup: OTPs removed={}", otpDeleted);
+        } catch (Exception e) {
+            log.error("MaintenanceScheduler: purgeExpiredTokens failed", e);
+            opsAlertService.alertJobFailure("MaintenanceScheduler.purgeExpiredTokens",
+                    "expired refresh token / password reset OTP cleanup", e);
+        }
     }
 
     @Scheduled(fixedDelay = 900_000)
     @Transactional
     public void unlockExpiredAccounts() {
-        userRepository.findExpiredLockouts(Instant.now()).forEach(user -> {
-            userRepository.resetLockout(user.getId());
-            log.info("Auto-unlocked account: id={}", user.getId());
-        });
+        try {
+            userRepository.findExpiredLockouts(Instant.now()).forEach(user -> {
+                userRepository.resetLockout(user.getId());
+                log.info("Auto-unlocked account: id={}", user.getId());
+            });
+        } catch (Exception e) {
+            // A repeated failure here means legitimately-lockout-expired users stay locked out
+            // indefinitely -- a real user-facing outage, not just housekeeping.
+            log.error("MaintenanceScheduler: unlockExpiredAccounts failed", e);
+            opsAlertService.alertJobFailure("MaintenanceScheduler.unlockExpiredAccounts",
+                    "auto-unlock of expired account lockouts", e);
+        }
     }
 
     /**
@@ -74,36 +90,56 @@ public class MaintenanceScheduler {
     @Scheduled(cron = "0 30 3 * * *")
     @Transactional
     public void purgeSettledNotifications() {
-        Instant cutoff = Instant.now().minusSeconds((long) notificationRetentionDays * 86400);
-        int removed = appNotificationRepository.deleteSettledOlderThan(cutoff);
-        log.info("Notification purge: {} read/dismissed rows older than {} days removed",
-                removed, notificationRetentionDays);
+        try {
+            Instant cutoff = Instant.now().minusSeconds((long) notificationRetentionDays * 86400);
+            int removed = appNotificationRepository.deleteSettledOlderThan(cutoff);
+            log.info("Notification purge: {} read/dismissed rows older than {} days removed",
+                    removed, notificationRetentionDays);
+        } catch (Exception e) {
+            log.error("MaintenanceScheduler: purgeSettledNotifications failed", e);
+            opsAlertService.alertJobFailure("MaintenanceScheduler.purgeSettledNotifications",
+                    "settled app-notification retention purge", e);
+        }
     }
 
     @Scheduled(cron = "0 0 3 * * *")
     @Transactional
     public void purgeOldChatSessions() {
-        Instant cutoff = Instant.now().minusSeconds((long) sessionMaxAgeDays * 86400);
-        int messages = chatMessageRepository.deleteMessagesForSessionsOlderThan(cutoff);
-        int sessions = chatSessionRepository.deleteSessionsOlderThan(cutoff);
-        log.info("FRIDAY session purge: {} messages + {} sessions older than {} days removed",
-                messages, sessions, sessionMaxAgeDays);
+        try {
+            Instant cutoff = Instant.now().minusSeconds((long) sessionMaxAgeDays * 86400);
+            int messages = chatMessageRepository.deleteMessagesForSessionsOlderThan(cutoff);
+            int sessions = chatSessionRepository.deleteSessionsOlderThan(cutoff);
+            log.info("FRIDAY session purge: {} messages + {} sessions older than {} days removed",
+                    messages, sessions, sessionMaxAgeDays);
+        } catch (Exception e) {
+            log.error("MaintenanceScheduler: purgeOldChatSessions failed", e);
+            opsAlertService.alertJobFailure("MaintenanceScheduler.purgeOldChatSessions",
+                    "Lucien chat session/message retention purge", e);
+        }
     }
 
     @Scheduled(fixedDelay = 30 * 60_000)
     @Transactional
     public void autoEndDanglingShifts() {
-        Instant cutoff = Instant.now().minusSeconds((long) shiftMaxHours * 3600);
-        List<AgentShift> dangling = agentShiftRepository.findStaleActiveShifts(cutoff);
-        if (dangling.isEmpty()) return;
-        Instant now = Instant.now();
-        for (AgentShift shift : dangling) {
-            shift.setStatus(ShiftStatus.AUTO_ENDED);
-            shift.setEndedAt(now);
+        try {
+            Instant cutoff = Instant.now().minusSeconds((long) shiftMaxHours * 3600);
+            List<AgentShift> dangling = agentShiftRepository.findStaleActiveShifts(cutoff);
+            if (dangling.isEmpty()) return;
+            Instant now = Instant.now();
+            for (AgentShift shift : dangling) {
+                shift.setStatus(ShiftStatus.AUTO_ENDED);
+                shift.setEndedAt(now);
+            }
+            agentShiftRepository.saveAll(dangling);
+            log.warn("Auto-ended {} dangling shifts (no ping for {} h): {}",
+                    dangling.size(), shiftMaxHours,
+                    dangling.stream().map(s -> s.getId().toString()).toList());
+        } catch (Exception e) {
+            // Attendance/payroll-relevant -- a repeated failure means shifts that should have
+            // auto-ended keep accruing hours indefinitely.
+            log.error("MaintenanceScheduler: autoEndDanglingShifts failed", e);
+            opsAlertService.alertJobFailure("MaintenanceScheduler.autoEndDanglingShifts",
+                    "auto-ending dangling agent shifts", e);
         }
-        agentShiftRepository.saveAll(dangling);
-        log.warn("Auto-ended {} dangling shifts (no ping for {} h): {}",
-                dangling.size(), shiftMaxHours,
-                dangling.stream().map(s -> s.getId().toString()).toList());
     }
 }

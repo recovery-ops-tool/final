@@ -29,6 +29,9 @@ public interface ColumnSchemaRepository extends JpaRepository<ColumnSchema, UUID
 
     boolean existsByOrganizationIdAndName(UUID organizationId, String name);
 
+    /** TASK 28.3: activation-checklist "configure column schemas" step. */
+    boolean existsByOrganizationId(UUID organizationId);
+
     boolean existsByOrganizationIdAndEntityTypeAndName(UUID organizationId, UploadType entityType, String name);
 
     @Query("SELECT c FROM ColumnSchema c WHERE c.organization.id = :organizationId ORDER BY c.sortOrder ASC")

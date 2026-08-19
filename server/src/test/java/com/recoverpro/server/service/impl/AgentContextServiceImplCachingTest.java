@@ -16,8 +16,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -117,5 +123,47 @@ class AgentContextServiceImplCachingTest {
         service.buildContext("session-2", agentId, "Ann");
 
         verify(assignmentRepository, times(2)).findAllByAgentAndDate(any(), any());
+    }
+
+    /**
+     * SYSTEM-PLAN 15.3: buildContext is TASK 15.3.b's own "expensive entry" example (several
+     * repository queries per call). Before this task, {@code @Cacheable} on this method had no
+     * {@code sync = true}, so N requests racing on the same never-before-seen sessionId would each
+     * independently miss the cache and run the full query set. This proves that's no longer true --
+     * a burst of concurrent callers for one cold session key produces exactly one backing
+     * computation, matching TASK 15.3's literal acceptance criterion.
+     */
+    @Test
+    void buildContext_concurrentColdSession_collapsesToOneComputation() throws Exception {
+        UUID agentId = UUID.randomUUID();
+        int threads = 10;
+
+        when(assignmentRepository.findAllByAgentAndDate(any(), any())).thenAnswer(inv -> {
+            Thread.sleep(50); // widen the race window so concurrent misses are actually likely
+            return List.<com.recoverpro.server.entity.Assignment>of();
+        });
+
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch go = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        List<Future<AgentContextDto>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            futures.add(pool.submit(() -> {
+                ready.countDown();
+                go.await();
+                return service.buildContext("cold-session", agentId, "Ann");
+            }));
+        }
+        ready.await();
+        go.countDown();
+
+        List<AgentContextDto> results = new ArrayList<>();
+        for (Future<AgentContextDto> f : futures) {
+            results.add(f.get(5, TimeUnit.SECONDS));
+        }
+        pool.shutdown();
+
+        assertThat(results).allMatch(r -> r == results.get(0));
+        verify(assignmentRepository, times(1)).findAllByAgentAndDate(any(), any());
     }
 }

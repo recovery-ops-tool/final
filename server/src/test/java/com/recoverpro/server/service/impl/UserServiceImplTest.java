@@ -11,9 +11,13 @@ import com.recoverpro.server.entity.Permission;
 import com.recoverpro.server.entity.Role;
 import com.recoverpro.server.entity.User;
 import com.recoverpro.server.mapper.UserMapper;
+import com.recoverpro.server.repository.ChatSessionRepository;
 import com.recoverpro.server.repository.PasswordResetTokenRepository;
 import com.recoverpro.server.repository.PermissionRepository;
+import com.recoverpro.server.repository.PtpHistoryRepository;
+import com.recoverpro.server.repository.PtpRepository;
 import com.recoverpro.server.repository.RoleRepository;
+import com.recoverpro.server.repository.UserCreationRequestRepository;
 import com.recoverpro.server.repository.UserPermissionRepository;
 import com.recoverpro.server.repository.UserRepository;
 import com.recoverpro.server.security.CustomUserDetailsService;
@@ -45,7 +49,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -69,6 +75,10 @@ class UserServiceImplTest {
     @Mock private EmailService emailService;
     @Mock private AppProperties appProperties;
     @Mock private CustomUserDetailsService customUserDetailsService;
+    @Mock private PtpHistoryRepository ptpHistoryRepository;
+    @Mock private PtpRepository ptpRepository;
+    @Mock private ChatSessionRepository chatSessionRepository;
+    @Mock private UserCreationRequestRepository userCreationRequestRepository;
 
     private UserServiceImpl service;
 
@@ -77,7 +87,8 @@ class UserServiceImplTest {
         service = new UserServiceImpl(userRepository, roleRepository, permissionRepository,
                 userPermissionRepository, passwordResetTokenRepository, userMapper, passwordEncoder,
                 auditLogService, auditService, entitlementService, emailService, appProperties,
-                customUserDetailsService);
+                customUserDetailsService, ptpHistoryRepository, ptpRepository, chatSessionRepository,
+                userCreationRequestRepository);
         lenient().when(entitlementService.canCreateUser(any())).thenReturn(true);
     }
 
@@ -369,5 +380,127 @@ class UserServiceImplTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("ROLE_PLATFORM_ADMIN");
         verify(userRepository, never()).save(any());
+    }
+
+    // ─── SYSTEM 18 TASK 18.3: pending-invite lifecycle ─────────────────────────
+
+    @Test
+    void resendInvite_neverLoggedIn_resendsOtp() {
+        UUID orgId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User user = User.builder().id(targetId).organizationId(orgId)
+                .email("new.hire@example.com").firstName("New").lastLoginAt(null).build();
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(user));
+        when(appProperties.getSecurity()).thenReturn(new com.recoverpro.server.config.AppProperties.Security());
+
+        service.resendInvite(orgId, targetId);
+
+        verify(emailService).sendWelcomeEmail(eq("new.hire@example.com"), eq("New"), anyString(), anyInt());
+        verify(auditLogService).logUserAction(any(), eq("USER_INVITE_RESENT"), contains(targetId.toString()));
+    }
+
+    @Test
+    void resendInvite_alreadyLoggedIn_throwsAndDoesNotSendEmail() {
+        UUID orgId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User user = User.builder().id(targetId).organizationId(orgId)
+                .lastLoginAt(java.time.Instant.now()).build();
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.resendInvite(orgId, targetId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("already completed onboarding");
+        verify(emailService, never()).sendWelcomeEmail(any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void revokeInvite_neverLoggedIn_disablesAndInvalidatesTokens() {
+        UUID orgId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User user = User.builder().id(targetId).organizationId(orgId).enabled(true).lastLoginAt(null).build();
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(user));
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        actAs(UUID.randomUUID());
+
+        service.revokeInvite(orgId, targetId);
+
+        assertThat(user.isEnabled()).isFalse();
+        verify(passwordResetTokenRepository).invalidateAllByUserId(targetId);
+        verify(auditLogService).logUserAction(any(), eq("USER_INVITE_REVOKED"), contains(targetId.toString()));
+    }
+
+    @Test
+    void revokeInvite_alreadyLoggedIn_throwsAndDoesNotDisable() {
+        UUID orgId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User user = User.builder().id(targetId).organizationId(orgId).enabled(true)
+                .lastLoginAt(java.time.Instant.now()).build();
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(user));
+        actAs(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.revokeInvite(orgId, targetId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("already completed onboarding");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void listPendingInvites_delegatesToRepositoryQuery() {
+        UUID orgId = UUID.randomUUID();
+        User pending = User.builder().id(UUID.randomUUID()).organizationId(orgId).build();
+        when(userRepository.findPendingInvitesByOrganizationId(orgId)).thenReturn(List.of(pending));
+        when(userMapper.toResponse(pending)).thenReturn(UserResponse.builder().build());
+
+        List<UserResponse> result = service.listPendingInvites(orgId);
+
+        assertThat(result).hasSize(1);
+    }
+
+    // ─── SYSTEM 18 TASK 18.4: GDPR erasure ──────────────────────────────────────
+
+    @Test
+    void eraseUserData_scrubsUsersRowAndEveryDenormalizedCopy() {
+        UUID orgId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User user = User.builder().id(targetId).organizationId(orgId)
+                .email("agent@example.com").firstName("Real").lastName("Name")
+                .mfaEnabled(true).mfaSecret("totp-secret").enabled(true).build();
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(user));
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(passwordEncoder.encode(anyString())).thenReturn("random-hash");
+        actAs(UUID.randomUUID());
+
+        service.eraseUserData(orgId, targetId, "Data subject request #123");
+
+        assertThat(user.getEmail()).isEqualTo("erased-" + targetId + "@recoverpro.internal");
+        assertThat(user.getFirstName()).isEqualTo("[Erased]");
+        assertThat(user.getLastName()).isEqualTo("[Erased]");
+        assertThat(user.getMfaSecret()).isNull();
+        assertThat(user.isMfaEnabled()).isFalse();
+        assertThat(user.isEnabled()).isFalse();
+        assertThat(user.getDeletedAt()).isNotNull();
+
+        verify(ptpHistoryRepository).scrubChangedByName(eq(targetId), eq("[Erased]"));
+        verify(ptpRepository).scrubAgentName(eq(targetId), eq("[Erased]"));
+        verify(chatSessionRepository).scrubAgentFirstName(eq(targetId), eq("[Erased]"));
+        verify(userCreationRequestRepository).scrubByCreatedUserId(
+                eq(targetId), eq("erased-" + targetId + "@recoverpro.internal"), eq("[Erased]"));
+        verify(passwordResetTokenRepository).invalidateAllByUserId(targetId);
+        verify(auditService).record(argThat(req ->
+                req.getAction() == com.recoverpro.server.enums.AuditAction.USER_DATA_ERASED));
+    }
+
+    @Test
+    void eraseUserData_targetingSelf_throwsAndDoesNotScrub() {
+        UUID selfId = UUID.randomUUID();
+        User user = User.builder().id(selfId).build();
+        when(userRepository.findById(selfId)).thenReturn(Optional.of(user));
+        actAs(selfId);
+
+        assertThatThrownBy(() -> service.eraseUserData(null, selfId, "self-request"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("own account");
+        verify(userRepository, never()).save(any());
+        verify(ptpHistoryRepository, never()).scrubChangedByName(any(), any());
     }
 }

@@ -3,6 +3,7 @@ package com.recoverpro.server.controller;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
@@ -37,8 +38,10 @@ public class KpiController {
     private final JdbcTemplate jdbc;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
 
+    private static final String ADMINS = Authz.ADMINS;
+
     @GetMapping("/collection-efficiency")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ApiResponse<List<Map<String, Object>>> collectionEfficiency(
             @RequestParam UUID organizationId, @RequestParam(required = false) String reason,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -50,7 +53,7 @@ public class KpiController {
     }
 
     @GetMapping("/roll-forward-rate")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ApiResponse<List<Map<String, Object>>> rollForwardRate(
             @RequestParam UUID organizationId, @RequestParam(required = false) String reason,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -62,7 +65,7 @@ public class KpiController {
     }
 
     @GetMapping("/ptp-kept-rate")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ApiResponse<List<Map<String, Object>>> ptpKeptRate(
             @RequestParam UUID organizationId, @RequestParam(required = false) String reason,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -73,7 +76,7 @@ public class KpiController {
     }
 
     @GetMapping("/contactability")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ApiResponse<List<Map<String, Object>>> contactability(
             @RequestParam UUID organizationId, @RequestParam(required = false) String reason,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -84,7 +87,7 @@ public class KpiController {
     }
 
     @GetMapping("/complaint-rate")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ApiResponse<List<Map<String, Object>>> complaintRate(
             @RequestParam UUID organizationId) {
         return ApiResponse.success(jdbc.queryForList(
@@ -94,7 +97,7 @@ public class KpiController {
     }
 
     @GetMapping("/grievance-mttr")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ApiResponse<List<Map<String, Object>>> grievanceMttr(
             @RequestParam UUID organizationId) {
         return ApiResponse.success(jdbc.queryForList(
@@ -103,7 +106,7 @@ public class KpiController {
     }
 
     @GetMapping("/reconciliation-gap")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ApiResponse<List<Map<String, Object>>> reconciliationGap(
             @RequestParam UUID organizationId, @RequestParam(required = false) String reason,
             @AuthenticationPrincipal UserPrincipal principal) {

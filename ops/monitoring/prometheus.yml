@@ -1,0 +1,25 @@
+# SYSTEM 12 TASK 12.1/12.3 -- scrape config for a future Prometheus deployment.
+# Not wired into docker-compose.yml -- see alert-rules.yml's header for why.
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - alert-rules.yml
+
+scrape_configs:
+  - job_name: recoverpro-backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # Update to the real backend host:port once this actually gets deployed --
+      # "backend:8080" matches docker-compose.yml's service name if Prometheus runs
+      # on the same compose network.
+      - targets: ["backend:8080"]
+
+# Alertmanager wiring (receiver config, routing) is intentionally not included here -- no
+# notification channel (Slack webhook, PagerDuty key, etc.) has been provided for this app.
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ["alertmanager:9093"]

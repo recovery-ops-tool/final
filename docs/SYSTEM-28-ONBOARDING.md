@@ -87,22 +87,94 @@ were **not** done — only 18.1, the piece blocking 28.1.
   + flags provisioned), `FeatureFlagServiceTest` (new file — expired trial denies plan-gated
   features and zeroes limits; trial-still-active is unaffected).
 
-## Not done this session (deferred, in scope for a later pass)
+## TASK 28.2 — Trial lifecycle [DONE] (2026-08-19 session)
 
-- **TASK 28.2 — Trial lifecycle** (scheduled expiry-transition job, expiry notifications, admin
-  trial-extension endpoint, web trial-status banner). The `effectivePlan()` fix above is a
-  prerequisite piece of this task's correctness, already done; the scheduled job, notifications,
-  and UI are not.
-- **TASK 28.3 — Guided activation** (checklist, time-to-first-import metric).
-- **TASK 28.4 — Self-serve signup**: per its own instructions, only needed if self-serve
-  signup is a real product goal — not assessed this session (would need a product decision, not
-  a technical one).
-- **SYSTEM 18 TASKs 18.2–18.4** (org suspend/reactivate/delete lifecycle, invite
-  resend/revoke/list, GDPR erasure) — untouched; only 18.1 was in scope, as the piece blocking
-  28.1.
+- **28.2.a (trial length/what it includes)**: already fully defined by TASK 28.1's own work --
+  `app.subscription.trial-days` (default 14), TRIAL resolves to STARTER-level access via
+  `effectivePlan()` until `trialEndsAt`. Nothing new needed.
+- **28.2.b (scheduled job)** -- the real remaining gap, and the one this session's own prior
+  record flagged as its "Important limitation": new `TrialExpiryScheduler`
+  (`server/scheduler/TrialExpiryScheduler.java`), mirroring `DunningScheduler`'s exact shape
+  (daily `@Scheduled`+`@SchedulerLock` sweep, each org processed in its own `REQUIRES_NEW`
+  transaction). Sends a reminder notification 3 and 1 days before `trialEndsAt`
+  (`ORG_TRIAL_EXPIRING_SOON`, new `NotificationType`); at/after expiry, transitions the
+  subscription to `CANCELLED` (this codebase has no dedicated `EXPIRED` status --
+  `effectivePlan()` already treats CANCELLED and an expired TRIAL identically, so this stays
+  within the states that already exist) and calls `provisionFlagsFor()` so the org's flags
+  actually flip to NONE the same day the trial ends, not whenever some unrelated event next
+  happens to re-provision. Notifies (`ORG_TRIAL_EXPIRED`, new `NotificationType`) and audits
+  (`SUBSCRIPTION_CANCELLED`, reused -- same action Dunning's own terminal transition uses,
+  `reason`/`metadata.trigger` distinguish the two causes).
+- **28.2.c (expiry restricts, never deletes)**: satisfied structurally -- neither this job nor
+  `provisionFlagsFor` touches any row outside `feature_flags`/`org_subscriptions`. A customer who
+  converts after expiry re-provisions correctly via the existing subscription-change wiring
+  (SYSTEM 20 TASK 20.3), no special-casing needed.
+- **28.2.d (trial extension, audited)**: found **already fully built** in a session after this
+  doc's original writing -- `PlatformSubscriptionController.extendTrial()` (`POST
+  /{orgId}/extend-trial`), rejects extending anything not currently TRIAL, audits
+  `ORG_TRIAL_EXTENDED`. No change needed.
+- **28.2.e (web trial-status banner)**: explicitly out of scope for this backend-only phase, same
+  boundary SYSTEM 18's rollup already used ("none of the 4 tasks' own ACCEPTANCE lines require"
+  the web piece; TASK 28.2's own ACCEPTANCE line doesn't mention the banner either).
+
+**Tests**: `TrialExpirySchedulerTest` (new, mirrors `DunningSchedulerTest`'s structure) -- reminder
+at 3/1 days remaining, no-op on a non-reminder day, expiry transitions+audits+notifies, exact-now
+boundary treated as expired, already-converted-since-sweep-list-built is a no-op.
+
+## TASK 28.3 — Guided activation [DONE, backend] (2026-08-19 session)
+
+New, from scratch -- nothing existed. 28.3.a's own suggested checklist (invite your team,
+configure column schemas, import your first allocation file, run your first assignment) is
+computed **live** against each step's real backing table on every read (`OnboardingServiceImpl`),
+not a maintained onboarding-progress row -- same "live check, correct by construction" reasoning
+`EntitlementServiceImpl`'s class javadoc already established for this codebase. `teamInvited`
+deliberately requires MORE than one user: `PlatformOrganizationController.create()` always creates
+the org's own initial admin, so "at least one user exists" would make that step permanently true
+from the instant of org creation and never actually reflect whether the org invited anyone.
+
+- **28.3.b (track + endpoint)**: `GET /api/v1/onboarding/checklist` (new `OnboardingController`,
+  `Authz.LEADS`) returns `OnboardingChecklistResponse` for the caller's own org.
+- **28.3.d (time-to-first-import)**: `timeToFirstImportMinutes` on the same response -- minutes
+  between `Organization.createdAt` and the first COMPLETED/PARTIALLY_COMPLETED ALLOCATION
+  upload's `createdAt`, null until that step is done. A plain numeric field, not an ISO-8601
+  `Duration`, for simpler frontend consumption later. This is the metric itself, computed and
+  exposed -- SYSTEM 33 (Analytics/BI, not in this phase's P0 scope) is where 28.3.d says the
+  metric ultimately lives/aggregates, not a prerequisite for exposing the raw value per org now.
+- **28.3.c (web checklist widget)**: out of scope, same backend-only boundary as 28.2.e.
+
+New repository methods (`AssignmentRepository.existsByOrganizationIdAndIsDeletedFalse`,
+`ColumnSchemaRepository.existsByOrganizationId`,
+`FileUploadRepository.findFirstCompletedByOrganizationIdAndUploadType`) -- all live
+exists/find-first queries, same style as the rest of this codebase's entitlement/limit checks.
+
+**Tests**: `OnboardingServiceImplTest` (fresh org has nothing complete; each step true/false
+independently; `teamInvited` specifically proven false with only the initial admin present;
+time-to-first-import computed correctly; all-steps-true implies `allComplete`),
+`OnboardingControllerTest` (missing org context rejects; delegates to the service for the
+caller's own org).
+
+## TASK 28.4 — Self-serve signup [SKIPPED, decision recorded] (2026-08-19 session)
+
+Per 28.4.a's own instruction: "Only if the product intends self-serve. If onboarding is
+sales-led, SKIP this task and record that decision." Confirmed sales-led/admin-provisioned, not
+assumed: org creation exists at exactly one place in the entire codebase,
+`PlatformOrganizationController.create()`, gated `@PreAuthorize("hasRole('PLATFORM_ADMIN')")` --
+no public signup endpoint, no unauthenticated org-creation path, anywhere. **Decision: skip.**
+Revisit only if self-serve signup becomes an actual product goal -- a business decision, not a
+technical one, same framing this doc's original session already gave it.
+
+## SYSTEM 18 TASKs 18.2-18.4
+
+Were "not done this session" in this doc's original writing -- since then, a later session
+completed all of SYSTEM 18 (org suspend/reactivate/delete lifecycle, invite resend/revoke/list,
+GDPR erasure). See `docs/SYSTEM-18-USER-ORG-MANAGEMENT.md`; SYSTEM 18's own rollup is `[x]`.
 
 ## Verification
 
 Full `mvn -f server/pom.xml test` and SYSTEM 28's own specified command
 (`-Dtest='*Onboarding*Test,*Organization*Test,*Trial*Test'`) both run at the end of this session
 — see the session's final report for the actual pass/fail counts.
+
+TASK 28.2/28.3 (2026-08-19 session): SYSTEM 28's own specified command
+(`-Dtest='*Onboarding*Test,*Organization*Test,*Trial*Test'`) — 28/28 passed. Full
+`mvn -f server/pom.xml clean test` run at the end of this session — see session's final report.

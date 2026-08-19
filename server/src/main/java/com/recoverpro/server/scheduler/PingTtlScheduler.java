@@ -1,6 +1,7 @@
 package com.recoverpro.server.scheduler;
 
 import com.recoverpro.server.repository.AgentLocationPingRepository;
+import com.recoverpro.server.service.OpsAlertService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -23,6 +24,7 @@ import java.time.Instant;
 public class PingTtlScheduler {
 
     private final AgentLocationPingRepository pingRepository;
+    private final OpsAlertService opsAlertService;
 
     @Value("${app.field-ops.ping-retention-days:30}")
     private int retentionDays;
@@ -31,9 +33,18 @@ public class PingTtlScheduler {
     @SchedulerLock(name = "PingTtlScheduler.purge", lockAtLeastFor = "PT1M", lockAtMostFor = "PT30M")
     @Transactional
     public void purge() {
-        Instant cutoff = Instant.now().minusSeconds((long) retentionDays * 86400);
-        int deleted = pingRepository.deleteOlderThan(cutoff);
-        log.info("PingTtlScheduler: purged {} pings older than {} (retention={}d)",
-                deleted, cutoff, retentionDays);
+        try {
+            Instant cutoff = Instant.now().minusSeconds((long) retentionDays * 86400);
+            int deleted = pingRepository.deleteOlderThan(cutoff);
+            log.info("PingTtlScheduler: purged {} pings older than {} (retention={}d)",
+                    deleted, cutoff, retentionDays);
+        } catch (Exception e) {
+            // Retention-policy purge, not just housekeeping -- a silent repeated failure here
+            // means location pings outlive the org's stated 30-day retention window, a
+            // compliance gap, not just a storage-growth one.
+            log.error("PingTtlScheduler: purge failed", e);
+            opsAlertService.alertJobFailure("PingTtlScheduler.purge",
+                    "agent location ping retention purge", e);
+        }
     }
 }

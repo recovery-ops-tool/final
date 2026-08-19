@@ -33,8 +33,28 @@ public class ChatRateLimiter {
     @Value("${lucien.rate-limit.ambient.window-seconds:60}")
     private long ambientWindowSeconds;
 
+    // SYSTEM 07 TASK 7.3: /speak (TTS synthesis) and /transcribe (STT) both call an external
+    // voice microservice per request -- real cost/compute per call, same "unthrottled AI
+    // endpoint is a billing incident waiting to happen" reasoning as chat, and neither had any
+    // limiter before this. One synthesis call per non-English Lucien reply and one transcription
+    // per mic-button press are the expected normal rates -- generous enough not to interfere,
+    // still bounded.
+    @Value("${lucien.rate-limit.speak.max-requests:30}")
+    private int speakMaxRequests;
+
+    @Value("${lucien.rate-limit.speak.window-seconds:60}")
+    private long speakWindowSeconds;
+
+    @Value("${lucien.rate-limit.transcribe.max-requests:30}")
+    private int transcribeMaxRequests;
+
+    @Value("${lucien.rate-limit.transcribe.window-seconds:60}")
+    private long transcribeWindowSeconds;
+
     private static final String KEY_PREFIX = "rate:chat:";
     private static final String AMBIENT_KEY_PREFIX = "rate:ambient:";
+    private static final String SPEAK_KEY_PREFIX = "rate:speak:";
+    private static final String TRANSCRIBE_KEY_PREFIX = "rate:transcribe:";
 
     // Atomic increment + conditional expire in a single Lua script.
     // Prevents the race where two threads both see count==0 and both set TTL,
@@ -53,6 +73,14 @@ public class ChatRateLimiter {
 
     public void checkAndRecordAmbient(UUID agentId) {
         checkAndRecord(AMBIENT_KEY_PREFIX + agentId, ambientMaxRequests, ambientWindowSeconds);
+    }
+
+    public void checkAndRecordSpeak(UUID agentId) {
+        checkAndRecord(SPEAK_KEY_PREFIX + agentId, speakMaxRequests, speakWindowSeconds);
+    }
+
+    public void checkAndRecordTranscribe(UUID agentId) {
+        checkAndRecord(TRANSCRIBE_KEY_PREFIX + agentId, transcribeMaxRequests, transcribeWindowSeconds);
     }
 
     private void checkAndRecord(String key, int limit, long windowSeconds) {

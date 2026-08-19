@@ -71,7 +71,7 @@ public class SystemPromptServiceImpl implements SystemPromptService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "systemPrompts", key = "#promptKey")
+    @Cacheable(value = "systemPrompts", key = "#promptKey", sync = true)
     public String resolveActiveTemplate(String promptKey) {
         return systemPromptConfigRepository.findByPromptKeyAndIsActiveTrue(promptKey)
                 .map(SystemPromptConfig::getPromptTemplate)

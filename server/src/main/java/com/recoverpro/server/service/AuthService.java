@@ -27,6 +27,8 @@ public interface AuthService {
 
     void revokeSession(UUID userId, UUID sessionId);
 
+    int revokeOtherSessions(UUID userId, String currentDeviceId);
+
     void forgotPassword(ForgotPasswordRequest request);
 
     void verifyResetOtp(VerifyOtpRequest request);

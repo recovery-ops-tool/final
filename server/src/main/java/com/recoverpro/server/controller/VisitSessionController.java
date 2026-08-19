@@ -9,6 +9,7 @@ import com.recoverpro.server.dto.request.VisitTransitionRequest;
 import com.recoverpro.server.dto.response.DistanceSummaryEntry;
 import com.recoverpro.server.dto.response.TeamStatusEntry;
 import com.recoverpro.server.dto.response.VisitSessionResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.VisitSessionService;
@@ -28,10 +29,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+// SYSTEM 09 TASK 9.2: no class had this before -- SecurityConfig's filter chain already requires
+// authentication for this whole path (not in PUBLIC_PATHS), so this isn't a behavior change, just
+// making that requirement explicit at the method-security layer too. Everything below except
+// teamStatus/distanceSummary is a field agent managing their own visit session
+// (principal.getId() throughout) -- no role beyond "authenticated" is meaningful here. Those two
+// methods keep their own more specific @PreAuthorize, which Spring Security applies instead of
+// this class-level one, not in addition to it.
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/visit-sessions")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class VisitSessionController {
 
     private final VisitSessionService visitSessionService;
@@ -50,7 +59,7 @@ public class VisitSessionController {
     @PostMapping("/{id}/reached")
     public ResponseEntity<ApiResponse<VisitSessionResponse>> reached(
             @PathVariable UUID id,
-            @RequestBody(required = false) VisitTransitionRequest request,
+            @Valid @RequestBody(required = false) VisitTransitionRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         if (request == null) request = new VisitTransitionRequest();
         VisitSessionResponse resp = visitSessionService.markReached(id, principal.getId(), request);
@@ -60,7 +69,7 @@ public class VisitSessionController {
     @PostMapping("/{id}/waiting")
     public ResponseEntity<ApiResponse<VisitSessionResponse>> waiting(
             @PathVariable UUID id,
-            @RequestBody(required = false) VisitTransitionRequest request,
+            @Valid @RequestBody(required = false) VisitTransitionRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         if (request == null) request = new VisitTransitionRequest();
         VisitSessionResponse resp = visitSessionService.markWaiting(id, principal.getId(), request);
@@ -79,7 +88,7 @@ public class VisitSessionController {
     @PostMapping("/{id}/close")
     public ResponseEntity<ApiResponse<VisitSessionResponse>> close(
             @PathVariable UUID id,
-            @RequestBody(required = false) CloseSessionRequest request,
+            @Valid @RequestBody(required = false) CloseSessionRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         if (request == null) request = new CloseSessionRequest();
         VisitSessionResponse resp = visitSessionService.closeSession(id, principal.getId(), request);
@@ -115,7 +124,7 @@ public class VisitSessionController {
     }
 
     @GetMapping("/team-status")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')")
+    @PreAuthorize(Authz.LEADS)
     public ResponseEntity<ApiResponse<List<TeamStatusEntry>>> teamStatus(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(required = false) UUID orgId,
@@ -128,7 +137,7 @@ public class VisitSessionController {
     }
 
     @GetMapping("/distance-summary")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')")
+    @PreAuthorize(Authz.LEADS)
     public ResponseEntity<ApiResponse<List<DistanceSummaryEntry>>> distanceSummary(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(required = false) UUID orgId,

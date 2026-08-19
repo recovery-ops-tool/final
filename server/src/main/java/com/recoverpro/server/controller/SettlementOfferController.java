@@ -10,6 +10,7 @@ import com.recoverpro.server.dto.request.SettlementRejectRequest;
 import com.recoverpro.server.dto.response.SettlementOfferResponse;
 import com.recoverpro.server.enums.SettlementOfferStatus;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.SettlementOfferService;
 import jakarta.validation.Valid;
@@ -32,12 +33,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SettlementOfferController {
 
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
-    private static final String SUBMITTERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER')";
-    private static final String APPROVERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
+    private static final String READERS = Authz.ALL_STAFF;
+    private static final String SUBMITTERS = Authz.ALL_STAFF_NO_TRACER;
+    private static final String APPROVERS = Authz.LEADS;
 
     private final SettlementOfferService settlementOfferService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
@@ -93,7 +91,7 @@ public class SettlementOfferController {
     @PreAuthorize(SUBMITTERS)
     public ResponseEntity<ApiResponse<SettlementOfferResponse>> borrowerAccept(
             @PathVariable UUID id,
-            @RequestBody(required = false) SettlementBorrowerAcceptRequest request,
+            @Valid @RequestBody(required = false) SettlementBorrowerAcceptRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         elevateIfPlatformAdmin(principal, "settlementOffers:borrowerAccept:" + id);
@@ -107,7 +105,7 @@ public class SettlementOfferController {
     @PreAuthorize(SUBMITTERS)
     public ResponseEntity<ApiResponse<SettlementOfferResponse>> markPaid(
             @PathVariable UUID id,
-            @RequestBody(required = false) SettlementMarkPaidRequest request,
+            @Valid @RequestBody(required = false) SettlementMarkPaidRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         elevateIfPlatformAdmin(principal, "settlementOffers:markPaid:" + id);

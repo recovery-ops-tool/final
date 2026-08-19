@@ -20,6 +20,9 @@ RUN mkdir -p /app/uploads /app/reports && chown -R recoverpro:recoverpro /app/up
 VOLUME ["/app/uploads"]
 USER recoverpro:recoverpro
 EXPOSE 8080
+# SYSTEM 05 TASK 5.2: readiness (not the aggregate health endpoint) is the right check here --
+# it reflects whether the app should currently receive traffic (DB/Redis/Flyway all healthy),
+# not just whether the process is alive.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD wget -qO- http://localhost:8080/actuator/health | grep -q '"status":"UP"' || exit 1
+  CMD wget -qO- http://localhost:8080/actuator/health/readiness | grep -q '"status":"UP"' || exit 1
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

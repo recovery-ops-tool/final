@@ -1,0 +1,34 @@
+name: dependency-review
+
+# SYSTEM 06 TASK 6.3: the PR-blocking half of dependency scanning (see .github/dependabot.yml for
+# the continuous-alerting half). Runs on every PR across the whole repo -- not path-filtered like
+# the language-specific *-ci.yml workflows, since a new vulnerable dependency in any of
+# server/web/mobile is equally worth blocking. fail-on-severity: high fails the check on either
+# HIGH or CRITICAL findings, matching TASK 6.3.c's "Fail the build on HIGH/CRITICAL findings"
+# exactly (GitHub's severity scale only goes low/moderate/high/critical -- "high" as the floor
+# means both of the task's two levels are covered, nothing above critical exists to miss).
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Maven's dependency graph isn't submitted to GitHub automatically the way npm's
+      # package-lock.json-derived graph is -- without this step, dependency-review-action below
+      # would only ever see web/mobile's npm dependencies, silently missing server/pom.xml's Maven
+      # dependencies entirely.
+      - name: Submit Maven dependency graph
+        uses: advanced-security/maven-dependency-submission-action@v4
+        with:
+          directory: server
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

@@ -6,11 +6,13 @@ import com.recoverpro.server.dto.request.EnableMfaRequest;
 import com.recoverpro.server.dto.response.MfaEnableResponse;
 import com.recoverpro.server.dto.response.MfaSetupResponse;
 import com.recoverpro.server.entity.MfaRecoveryCode;
+import com.recoverpro.server.entity.Organization;
 import com.recoverpro.server.entity.User;
 import com.recoverpro.server.enums.AuditAction;
 import com.recoverpro.server.enums.AuditResourceType;
 import com.recoverpro.server.exception.InvalidTotpException;
 import com.recoverpro.server.repository.MfaRecoveryCodeRepository;
+import com.recoverpro.server.repository.OrganizationRepository;
 import com.recoverpro.server.repository.UserRepository;
 import com.recoverpro.server.security.totp.TotpService;
 import com.recoverpro.server.service.AuditEventRequest;
@@ -41,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 public class MfaServiceImpl implements MfaService {
 
     private final UserRepository userRepository;
+    private final OrganizationRepository organizationRepository;
     private final MfaRecoveryCodeRepository mfaRecoveryCodeRepository;
     private final TotpService totpService;
     private final StringRedisTemplate redisTemplate;
@@ -161,17 +164,30 @@ public class MfaServiceImpl implements MfaService {
                 .build());
     }
 
-    @Override
-    public boolean isEnforced() {
-        return mfaEnforce;
-    }
-
+    /**
+     * SYSTEM 08 TASK 8.3.c: the org-level check is unconditional (an org that has opted itself
+     * into MFA is not gated by the platform-wide app.security.mfa.enforce switch -- that switch
+     * governs the SEPARATE role-based policy below, a platform decision, not a tenant one).
+     * Written test-first per the task's own instruction (MfaServiceImplTest, before this method
+     * body existed) -- getting this wrong creates an authentication bypass.
+     */
     @Override
     public boolean requiresMfaEnrollment(User user) {
+        if (organizationRequiresMfa(user.getOrganizationId())) {
+            return true;
+        }
+        if (!mfaEnforce) return false;
         if (mfaRequiredRolesCsv == null || mfaRequiredRolesCsv.isBlank()) return false;
         List<String> required = Arrays.stream(mfaRequiredRolesCsv.split(","))
                 .map(String::trim).filter(s -> !s.isEmpty()).toList();
         return user.getRoles().stream().anyMatch(r -> required.contains(r.getName()));
+    }
+
+    private boolean organizationRequiresMfa(UUID organizationId) {
+        if (organizationId == null) return false; // platform admins belong to no tenant org
+        return organizationRepository.findById(organizationId)
+                .map(Organization::isMfaRequired)
+                .orElse(false);
     }
 
     @Override

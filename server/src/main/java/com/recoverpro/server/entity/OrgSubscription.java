@@ -99,6 +99,14 @@ public class OrgSubscription {
     @Column(name = "past_due_since")
     private Instant pastDueSince;
 
+    /** SYSTEM 19 TASK 19.3.c: timestamp of the last webhook event actually applied to this row
+     *  (Stripe Event.created / Razorpay's envelope created_at), NOT this row's own updatedAt --
+     *  those are different clocks (updatedAt also moves on unrelated platform-admin writes like a
+     *  comp grant, which must not make an otherwise-newer webhook look "stale" by comparison).
+     *  Null for any row that predates this column or has never received a webhook. */
+    @Column(name = "last_webhook_event_at")
+    private Instant lastWebhookEventAt;
+
     /* ── Admin-granted access ────────────────────────────────────────────────
      * Written only by the platform-admin comp endpoints. StripeWebhookService
      * must never touch these: they exist precisely so a grant survives the

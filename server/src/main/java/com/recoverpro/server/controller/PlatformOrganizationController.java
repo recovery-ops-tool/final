@@ -17,6 +17,7 @@ import com.recoverpro.server.enums.NotificationType;
 import com.recoverpro.server.enums.OrganizationType;
 import com.recoverpro.server.mapper.UserMapper;
 import com.recoverpro.server.repository.*;
+import com.recoverpro.server.security.CustomUserDetailsService;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.AuditEventRequest;
 import com.recoverpro.server.service.AuditService;
@@ -33,6 +34,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.SecureRandom;
@@ -61,6 +64,10 @@ public class PlatformOrganizationController {
     private final NotificationService notificationService;
     private final OrgSubscriptionRepository orgSubscriptionRepo;
     private final FeatureFlagService featureFlagService;
+    private final CustomUserDetailsService customUserDetailsService;
+
+    @Value("${app.org-retention.deletion-window-days:30}")
+    private int deletionRetentionDays;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -240,25 +247,91 @@ public class PlatformOrganizationController {
         return ResponseEntity.ok(ApiResponse.success(toSummary(orgRepo.findById(id).orElseThrow())));
     }
 
+    /**
+     * SYSTEM 18 TASK 18.2.c: soft delete, never an immediate cascade. This used to call
+     * {@code orgRepo.delete(org)} outright (guarded only by "zero users left") -- a misclick
+     * against an emptied-but-otherwise-fine org had no recovery path. Now it starts a retention
+     * window ({@link #deletionRetentionDays}); {@code OrganizationPurgeJob} hard-purges once it
+     * elapses. Still requires zero users first: an org with active members isn't a candidate for
+     * deletion at all, soft or hard -- remove/reassign them through the ordinary user-lifecycle
+     * endpoints first, which is itself an intentional, individually-audited action per user.
+     */
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID id,
+            @RequestParam(required = false) String reason,
             @AuthenticationPrincipal UserPrincipal caller) {
 
         Organization org = orgRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + id));
         if (PlatformConstants.PLATFORM_ORG_CODE.equalsIgnoreCase(org.getCode()))
             throw new BusinessException("Platform organization cannot be deleted");
+        if (org.getDeletedAt() != null)
+            throw new BusinessException("Organization is already deleted");
 
         long userCount = userRepo.countByOrganizationId(id);
         if (userCount > 0)
             throw new BusinessException("Cannot delete organization: " + userCount + " user(s) still belong to it. Remove all users first.");
 
+        org.setActive(false);
+        org.setDeletedAt(Instant.now());
+        org.setDeletionReason(reason != null && !reason.isBlank() ? reason.trim() : null);
+        orgRepo.save(org);
+
         auditLogService.logUserAction(caller.getId(), "ORG_DELETED",
-                "Deleted org: " + org.getName() + " [" + org.getCode() + "] id=" + id);
-        orgRepo.delete(org);
-        return ResponseEntity.ok(ApiResponse.of("Organization deleted", null));
+                "Soft-deleted org: " + org.getName() + " [" + org.getCode() + "] id=" + id
+                        + "; purge scheduled after " + deletionRetentionDays + "d");
+        auditService.record(AuditEventRequest.builder()
+                .action(AuditAction.ORG_DELETED)
+                .resourceType(AuditResourceType.ORGANIZATION)
+                .resourceId(id.toString())
+                .organizationIdOverride(id)
+                .actorUserIdOverride(caller.getId())
+                .reason(reason)
+                .afterState(Map.of("deletedAt", String.valueOf(org.getDeletedAt()),
+                        "purgeAfter", String.valueOf(org.getDeletedAt().plus(deletionRetentionDays, ChronoUnit.DAYS))))
+                .build());
+        evictOrgUserCachesAfterCommit(id);
+        return ResponseEntity.ok(ApiResponse.of(
+                "Organization deleted. Permanently purged after " + deletionRetentionDays + " days.", null));
+    }
+
+    /**
+     * Reverses {@link #delete} within the retention window, before {@code OrganizationPurgeJob}
+     * hard-purges it. Deliberately does not restore {@code isActive} to true -- an org that was
+     * suspended before deletion should stay suspended after being pulled back, not silently regain
+     * access; a platform admin can reactivate separately via {@link #setActive}.
+     */
+    @PostMapping("/{id}/restore")
+    @Transactional
+    public ResponseEntity<ApiResponse<OrganizationSummaryResponse>> restore(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal caller) {
+
+        Organization org = orgRepo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + id));
+        if (org.getDeletedAt() == null)
+            throw new BusinessException("Organization is not deleted");
+        if (org.getPurgedAt() != null)
+            throw new BusinessException("Organization was already purged on " + org.getPurgedAt()
+                    + " and cannot be restored");
+
+        org.setDeletedAt(null);
+        org.setDeletionReason(null);
+        orgRepo.save(org);
+
+        auditLogService.logUserAction(caller.getId(), "ORG_DELETION_RESTORED",
+                "Restored org from pending deletion: " + org.getName() + " [" + org.getCode() + "] id=" + id);
+        auditService.record(AuditEventRequest.builder()
+                .action(AuditAction.ORG_REACTIVATED)
+                .resourceType(AuditResourceType.ORGANIZATION)
+                .resourceId(id.toString())
+                .organizationIdOverride(id)
+                .actorUserIdOverride(caller.getId())
+                .reason("Restored from pending deletion")
+                .build());
+        return ResponseEntity.ok(ApiResponse.success(toSummary(org)));
     }
 
     @PatchMapping("/{id}/active")
@@ -287,10 +360,33 @@ public class PlatformOrganizationController {
                 .beforeState(Map.of("active", String.valueOf(previous)))
                 .afterState(Map.of("active", String.valueOf(active)))
                 .build());
+        // SYSTEM 18 TASK 18.2.b: without this, a suspended org's users would keep authenticating
+        // successfully against their still-cached UserPrincipal (organizationActive=true) for up
+        // to the "userDetails" cache's TTL (SYSTEM 15) -- the acceptance criterion is "blocks the
+        // NEXT request", not "blocks it within 5 minutes."
+        evictOrgUserCachesAfterCommit(id);
         return ResponseEntity.ok(ApiResponse.success(toSummary(org)));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+
+    /** See {@link com.recoverpro.server.service.impl.UserServiceImpl#evictUserCacheAfterCommit}
+     *  for why eviction happens after commit, not inside the transaction. This is that same
+     *  pattern applied to every member of an org at once, for suspend/delete transitions. */
+    private void evictOrgUserCachesAfterCommit(UUID organizationId) {
+        List<String> emails = userRepo.findEmailsByOrganizationId(organizationId);
+        if (emails.isEmpty()) return;
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    emails.forEach(customUserDetailsService::evictUserCache);
+                }
+            });
+        } else {
+            emails.forEach(customUserDetailsService::evictUserCache);
+        }
+    }
 
     private void sendWelcomeOtp(User user) {
         int expiryMinutes = appProperties.getSecurity().getWelcomeOtpExpiryMinutes();

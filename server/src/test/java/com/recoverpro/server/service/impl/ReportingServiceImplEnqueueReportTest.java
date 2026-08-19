@@ -14,6 +14,7 @@ import com.recoverpro.server.repository.CollectionRepository;
 import com.recoverpro.server.repository.MonthlyLoanBookSnapshotRepository;
 import com.recoverpro.server.repository.NpaRecordRepository;
 import com.recoverpro.server.repository.ReportJobRepository;
+import com.recoverpro.server.service.EntitlementService;
 import com.recoverpro.server.service.ExportService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,6 +56,7 @@ class ReportingServiceImplEnqueueReportTest {
     @Mock private AllocationRepository allocationRepository;
     @Mock private NpaRecordRepository npaRecordRepository;
     @Mock private ReportJobExecutor reportJobExecutor;
+    @Mock private EntitlementService entitlementService;
 
     private ReportingServiceImpl service;
     private UUID orgId;
@@ -63,9 +66,11 @@ class ReportingServiceImplEnqueueReportTest {
     void setUp() {
         service = new ReportingServiceImpl(agentSnapshotRepository, loanBookSnapshotRepository,
                 reportJobRepository, reportMapper, exportService, new ObjectMapper(),
-                collectionRepository, allocationRepository, npaRecordRepository, reportJobExecutor);
+                collectionRepository, allocationRepository, npaRecordRepository, reportJobExecutor,
+                entitlementService);
         orgId = UUID.randomUUID();
         requestedBy = UUID.randomUUID();
+        lenient().when(entitlementService.canGenerateReport(any())).thenReturn(true);
         TransactionSynchronizationManager.initSynchronization();
     }
 
@@ -101,5 +106,28 @@ class ReportingServiceImplEnqueueReportTest {
         TransactionSynchronizationUtils.triggerAfterCommit();
 
         verify(reportJobExecutor).processJobAsync(eq(jobId), any());
+    }
+
+    /**
+     * SYSTEM-PLAN 20.4: the entitlement check runs before the existing-job existence check or any
+     * DB write -- a plan-limit rejection should be the cheapest possible failure. Asserts the job
+     * is never persisted once the org's monthly report-generation cap is exhausted.
+     */
+    @Test
+    void enqueueReport_atMonthlyLimit_rejectsBeforeAnyWrite() {
+        when(entitlementService.canGenerateReport(orgId)).thenReturn(false);
+
+        ReportRequest request = ReportRequest.builder()
+                .organizationId(orgId)
+                .reportType(ReportType.COLLECTION_EFFICIENCY)
+                .exportFormat(ExportFormat.EXCEL)
+                .build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.enqueueReport(request, requestedBy))
+                .isInstanceOf(com.recoverpro.server.common.exception.BusinessException.class)
+                .hasMessageContaining("report generation limit");
+
+        verify(reportJobRepository, never()).save(any());
+        verify(reportJobRepository, never()).existsByRequestedByAndStatusIn(any(), any());
     }
 }

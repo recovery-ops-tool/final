@@ -4,6 +4,7 @@ import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.dto.request.CreateRoleRequest;
 import com.recoverpro.server.dto.response.PermissionResponse;
 import com.recoverpro.server.dto.response.RoleResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.RoleService;
@@ -24,7 +25,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RoleController {
 
-    private static final String ADMIN_ROLES = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
+    private static final String ADMIN_ROLES = Authz.LEADS;
     // A custom role granted ROLE_ASSIGN via Role Management can edit role permissions without
     // needing ORG_ADMIN/PLATFORM_ADMIN — see UserController's matching CAN_CREATE_USER.
     private static final String CAN_ASSIGN_ROLE = ADMIN_ROLES + " or hasAuthority('ROLE_ASSIGN')";
@@ -56,6 +57,10 @@ public class RoleController {
                 .body(ApiResponse.success(roleService.createRole(request)));
     }
 
+    // SYSTEM 07 TASK 7.4: deliberately NOT converted to a typed DTO -- Set<UUID> is already a
+    // complete constraint (Jackson rejects a malformed UUID before this method ever runs, via
+    // the existing HttpMessageNotReadableException handler), there's no free-text/format gap a
+    // DTO wrapper would meaningfully close. Empty set is valid input (removes all permissions).
     @PatchMapping("/{id}/permissions")
     @PreAuthorize(CAN_ASSIGN_ROLE)
     public ResponseEntity<ApiResponse<RoleResponse>> updatePermissions(

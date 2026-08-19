@@ -1,6 +1,7 @@
 package com.recoverpro.server.service.impl;
 
 import com.recoverpro.server.service.EmailService;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 public class EmailServiceImpl implements EmailService {
 
     private final JavaMailSender mailSender;
+    private final MeterRegistry meterRegistry;
 
     @Value("${spring.mail.username:}")
     private String fromAddress;
@@ -91,6 +93,7 @@ public class EmailServiceImpl implements EmailService {
         if (fromAddress == null || fromAddress.isBlank()) {
             log.warn("Email not sent (subject='{}', to={}): spring.mail.username is not configured.",
                     message.getSubject(), to);
+            emailSendCounter("skipped_unconfigured").increment();
             return;
         }
         try {
@@ -98,9 +101,19 @@ public class EmailServiceImpl implements EmailService {
             message.setTo(to);
             mailSender.send(message);
             log.info("Email sent: subject='{}', to={}", message.getSubject(), to);
+            emailSendCounter("sent").increment();
         } catch (Exception e) {
             log.error("Failed to send email: subject='{}', to={}", message.getSubject(), to, e);
+            emailSendCounter("failed").increment();
         }
+    }
+
+    /** SYSTEM 12 TASK 12.2: email_send_events_total{outcome} -- every email this app sends funnels
+     *  through this one method, so this is the single choke point for the metric. */
+    private io.micrometer.core.instrument.Counter emailSendCounter(String outcome) {
+        return io.micrometer.core.instrument.Counter.builder("email_send_events_total")
+                .tag("outcome", outcome)
+                .register(meterRegistry);
     }
 
     private static String sanitizeHeaderValue(String raw) {

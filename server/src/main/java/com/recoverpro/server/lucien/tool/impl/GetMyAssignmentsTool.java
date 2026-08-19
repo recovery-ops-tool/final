@@ -38,7 +38,7 @@ public class GetMyAssignmentsTool implements LucienTool {
 
     @Override
     public String execute(JsonNode args, UserPrincipal principal) {
-        orgIsolationGuard.belongsToOrg(principal.getOrganizationId());
+        orgIsolationGuard.assertBelongsToOrg(principal.getOrganizationId());
         try {
             var cases = assignmentService.getMyActiveCases(
                     principal.getId(), principal.getOrganizationId(), PageRequest.of(0, 30));

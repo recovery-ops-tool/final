@@ -1,20 +1,25 @@
 package com.recoverpro.server.controller;
 
 import com.recoverpro.server.annotation.RequiresFeature;
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
+import com.recoverpro.server.common.exception.RateLimitExceededException;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
+import com.recoverpro.server.config.AppProperties;
 import com.recoverpro.server.config.PlanFeatureMatrix;
 import com.recoverpro.server.dto.request.ReportRequest;
 import com.recoverpro.server.dto.response.*;
 import com.recoverpro.server.enums.ReportStatus;
 import com.recoverpro.server.enums.ReportType;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.dto.response.FoDayReportResponse;
 import com.recoverpro.server.dto.response.MisEodReportResponse;
 import com.recoverpro.server.service.MisEodReportService;
 import com.recoverpro.server.service.ReportingService;
+import com.recoverpro.server.util.RateLimiter;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,11 +43,13 @@ import java.util.UUID;
 @PreAuthorize(ReportingController.READERS)
 public class ReportingController {
 
-    static final String READERS = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
+    static final String READERS = Authz.LEADS;
 
     private final ReportingService reportingService;
     private final MisEodReportService misEodReportService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
+    private final RateLimiter rateLimiter;
+    private final AppProperties appProperties;
 
     @GetMapping("/agent/{agentId}/performance")
     public ResponseEntity<ApiResponse<AgentPerformanceResponse>> getAgentPerformance(
@@ -68,7 +75,7 @@ public class ReportingController {
         authorizeOrgAccess(principal, orgId, reason, "reports:agentRankings");
         Page<AgentPerformanceResponse> result = reportingService.getAgentRankings(
                 orgId, date != null ? date : LocalDate.now(),
-                PageRequest.of(page, size, Sort.by("efficiencyScore").descending()));
+                PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("efficiencyScore").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 
@@ -135,7 +142,8 @@ public class ReportingController {
             @AuthenticationPrincipal UserPrincipal principal) {
         authorizeOrgAccess(principal, orgId, reason, "reports:loanBookHistory");
         Page<MonthlyLoanBookResponse> result = reportingService.getMonthlyLoanBookHistory(
-                orgId, PageRequest.of(page, size, Sort.by("snapshotMonth").descending()));
+                orgId, PageRequest.of(page, size,
+                        SafeSort.withIdTiebreaker(Sort.by("snapshotMonth").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 
@@ -170,6 +178,15 @@ public class ReportingController {
             @AuthenticationPrincipal UserPrincipal principal) {
         log.info("POST /reports/generate - type={} format={} orgId={}",
                 request.getReportType(), request.getExportFormat(), request.getOrganizationId());
+        // SYSTEM 07 TASK 7.3: keyed by the authenticated user -- each call enqueues a real
+        // background job (DB aggregation + export file generation via ReportJobExecutor).
+        AppProperties.Security sec = appProperties.getSecurity();
+        String rateLimitKey = "report:" + principal.getId();
+        if (!rateLimiter.isAllowed(rateLimitKey, sec.getReportGenerateMaxAttempts(), sec.getReportGenerateWindowMinutes())) {
+            long retryAfter = rateLimiter.getRetryAfterSeconds(rateLimitKey);
+            throw new RateLimitExceededException(
+                    "Too many report requests. Try again in " + retryAfter + "s.", retryAfter);
+        }
         authorizeOrgAccess(principal, request.getOrganizationId(), reason, "reports:generate");
         ReportJobResponse job = reportingService.enqueueReport(request, principal.getId());
         return ResponseEntity.status(HttpStatus.ACCEPTED)
@@ -220,7 +237,8 @@ public class ReportingController {
             @AuthenticationPrincipal UserPrincipal principal) {
         authorizeOrgAccess(principal, orgId, reason, "reports:jobs");
         Page<ReportJobResponse> result = reportingService.getJobs(
-                orgId, type, status, PageRequest.of(page, size, Sort.by("createdAt").descending()));
+                orgId, type, status, PageRequest.of(page, size,
+                        SafeSort.withIdTiebreaker(Sort.by("createdAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 

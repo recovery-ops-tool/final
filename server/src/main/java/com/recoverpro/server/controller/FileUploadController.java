@@ -1,16 +1,21 @@
 package com.recoverpro.server.controller;
 
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.common.exception.BusinessException;
+import com.recoverpro.server.common.exception.RateLimitExceededException;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
+import com.recoverpro.server.config.AppProperties;
 import com.recoverpro.server.dto.response.FileProcessingErrorResponse;
 import com.recoverpro.server.dto.response.FileUploadResponse;
 import com.recoverpro.server.enums.UploadType;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.FileUploadService;
 import com.recoverpro.server.service.importer.ImportTemplateService;
+import com.recoverpro.server.util.RateLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -33,12 +38,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FileUploadController {
 
-    private static final String READERS = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
-    private static final String WRITERS = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')";
+    private static final String READERS = Authz.LEADS;
+    private static final String WRITERS = Authz.ADMINS;
 
     private final FileUploadService fileUploadService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
     private final ImportTemplateService importTemplateService;
+    private final RateLimiter rateLimiter;
+    private final AppProperties appProperties;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize(WRITERS)
@@ -49,6 +56,17 @@ public class FileUploadController {
             @RequestParam(defaultValue = "ALLOCATION") UploadType uploadType,
             @RequestParam(defaultValue = "false") boolean historicalImport,
             @AuthenticationPrincipal UserPrincipal principal) {
+
+        // SYSTEM 07 TASK 7.3: keyed by the authenticated user, not IP -- each upload triggers
+        // real background work (parsing, PII encryption, DB writes), so the identity that
+        // matters is who queued it, the same reasoning ChatRateLimiter uses for agentId.
+        AppProperties.Security sec = appProperties.getSecurity();
+        String rateLimitKey = "upload:" + principal.getId();
+        if (!rateLimiter.isAllowed(rateLimitKey, sec.getFileUploadMaxAttempts(), sec.getFileUploadWindowMinutes())) {
+            long retryAfter = rateLimiter.getRetryAfterSeconds(rateLimitKey);
+            throw new RateLimitExceededException(
+                    "Too many uploads. Try again in " + retryAfter + "s.", retryAfter);
+        }
 
         UUID effectiveOrgId = resolveOrgId(principal, organizationId, reason, "file-uploads:create");
         if (effectiveOrgId == null) throw new BusinessException("Authenticated user has no organization context");
@@ -93,7 +111,8 @@ public class FileUploadController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         UUID effectiveOrgId = resolveOrgId(principal, organizationId, reason, "file-uploads:list");
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = PageRequest.of(page, size,
+                SafeSort.withIdTiebreaker(Sort.by(Sort.Direction.DESC, "createdAt")));
         return ResponseEntity.ok(ApiResponse.success(
                 fileUploadService.getUploadsByOrganization(effectiveOrgId, pageable)));
     }
@@ -108,7 +127,8 @@ public class FileUploadController {
 
         FileUploadResponse upload = fileUploadService.getUploadStatus(id);
         assertSameTenant(upload.getOrganizationId(), principal);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "rowNumber"));
+        Pageable pageable = PageRequest.of(page, size,
+                SafeSort.withIdTiebreaker(Sort.by(Sort.Direction.ASC, "rowNumber")));
         return ResponseEntity.ok(ApiResponse.success(fileUploadService.getProcessingErrors(id, pageable)));
     }
 

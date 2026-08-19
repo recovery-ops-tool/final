@@ -43,6 +43,9 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
 
     boolean existsByAllocationIdAndIsDeletedFalseAndStatusNot(UUID allocationId, AssignmentStatus status);
 
+    /** TASK 28.3: activation-checklist "run your first assignment" step. */
+    boolean existsByOrganizationIdAndIsDeletedFalse(UUID organizationId);
+
     @Query("SELECT a FROM Assignment a WHERE a.allocationId IN :allocationIds AND a.isDeleted = false AND a.status <> 'CANCELLED'")
     List<Assignment> findActiveByAllocationIds(@Param("allocationIds") List<UUID> allocationIds);
 

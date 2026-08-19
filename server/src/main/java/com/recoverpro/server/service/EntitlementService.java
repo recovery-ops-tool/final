@@ -20,4 +20,14 @@ public interface EntitlementService {
     boolean canCreateUser(UUID organizationId);
 
     boolean canCreateAllocations(UUID organizationId, long additionalCount);
+
+    /** TASK 20.4: this month's file-upload count vs. the org's plan cap. */
+    boolean canUploadFile(UUID organizationId);
+
+    /** TASK 20.4: current stored bytes (already-uploaded, non-deleted files) plus a pending
+     *  upload's size vs. the org's plan storage cap. */
+    boolean canUseStorage(UUID organizationId, long additionalBytes);
+
+    /** TASK 20.4: this month's report-generation count vs. the org's plan cap. */
+    boolean canGenerateReport(UUID organizationId);
 }

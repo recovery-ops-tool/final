@@ -1,0 +1,46 @@
+-- =============================================================================
+-- V106__drop_orphaned_audit_events_table.sql
+-- =============================================================================
+-- SYSTEM 10 TASK 10.5: resolves the orphaned `audit_events` table that V085's own
+-- header comment (and this migration's own investigation) found sitting in the
+-- schema with no Flyway migration owning it and no live application code
+-- referencing it.
+--
+-- Provenance investigation (10.5.a/b), not a guess:
+--   - Schema: id, action, actor_id, actor_role, after_data, before_data,
+--     category (AUTH|FINANCIAL), created_at, ip_address, metadata,
+--     occurred_at, organization_id, outcome, purpose, request_id,
+--     retention_until, session_id, target_id, target_type, user_agent.
+--     Shape and content read as a genuine (not dummy/placeholder) early
+--     prototype of exactly what unified_audit_events (V085) now does properly:
+--     real login events (LOGIN_SUCCESS) with real IPs/user-agents/request IDs,
+--     organization_id/actor_id/target_id referencing real orgs/users, and a
+--     retention_until already computed per row (created_at + 1 year) -- a
+--     retention design this migration's sibling task (10.3) is only now
+--     formalizing for the current table.
+--   - 19 rows, occurred_at spanning 2026-05-16 through 2026-05-28.
+--   - `git log --all` in this repository shows the earliest commit
+--     (447b4b1, "Baseline: raw copy of ops-tool server + recoverpro web") is
+--     dated 2026-07-17 -- seven weeks AFTER this table's last row. No commit in
+--     this repository's history ever created, migrated, or queried
+--     `audit_events` (`git log --all -S"audit_events"` matches only the later
+--     commits that documented it as orphaned). The table and its data predate
+--     this repository entirely: an artifact carried over in the raw DB copy
+--     from the predecessor "ops-tool" project, from an early auth-audit
+--     prototype that was abandoned before this codebase's history begins and
+--     superseded by the properly Flyway-owned, RLS-protected, partitioned
+--     unified_audit_events design (V085).
+--   - RLS was never enabled on it (confirmed: relrowsecurity=false), and
+--     V058's own "close every remaining RLS gap" sweep explicitly investigated
+--     and skipped it as dead rather than protecting it -- independent
+--     confirmation from an earlier session that this table was already
+--     considered orphaned before this migration.
+--
+-- Rows archived (10.5.b) to docs/archive/audit_events_orphaned_table_archive.json
+-- (all 19 rows, full column set, verbatim) before this drop -- real historical
+-- security-relevant data (login events, IPs, user/org references) is not
+-- discarded, just removed from the live, queryable schema so it stops being
+-- confused with unified_audit_events by future readers.
+-- =============================================================================
+
+DROP TABLE IF EXISTS audit_events;

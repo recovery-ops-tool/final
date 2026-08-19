@@ -8,5 +8,9 @@ public enum AuditActorType {
     USER,
     SYSTEM,
     BACKGROUND_JOB,
-    API_CLIENT
+    API_CLIENT,
+    /** No authenticated principal at all -- a request rejected before/without ever resolving to
+     *  a user (missing, expired, or blacklisted token). Distinct from SYSTEM, which means this
+     *  app itself acted (a job, a webhook handler), not an unidentified external caller. */
+    ANONYMOUS
 }

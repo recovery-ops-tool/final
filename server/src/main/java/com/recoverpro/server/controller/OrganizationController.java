@@ -8,9 +8,14 @@ import com.recoverpro.server.dto.request.UpdateOrganizationRequest;
 import com.recoverpro.server.dto.response.OrganizationSummaryResponse;
 import com.recoverpro.server.entity.Organization;
 import com.recoverpro.server.entity.User;
+import com.recoverpro.server.enums.AuditAction;
+import com.recoverpro.server.enums.AuditResourceType;
 import com.recoverpro.server.repository.OrganizationRepository;
 import com.recoverpro.server.repository.UserRepository;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
+import com.recoverpro.server.service.AuditEventRequest;
+import com.recoverpro.server.service.AuditService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,11 +40,15 @@ public class OrganizationController {
 
     private final OrganizationRepository orgRepo;
     private final UserRepository userRepo;
+    private final AuditService auditService;
 
     /**
      * GET /api/v1/organizations/me
      */
+    // SYSTEM 09 TASK 9.2: makes the pre-existing filter-chain authentication requirement
+    // explicit -- self-service read of the caller's own org (requireOwnOrg below).
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse<OrganizationSummaryResponse>> me(
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -52,7 +61,7 @@ public class OrganizationController {
      * PATCH /api/v1/organizations/me
      */
     @PatchMapping("/me")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(Authz.ADMINS)
     @Transactional
     public ResponseEntity<ApiResponse<OrganizationSummaryResponse>> update(
             @AuthenticationPrincipal UserPrincipal principal,
@@ -64,23 +73,34 @@ public class OrganizationController {
             throw new BusinessException("The platform organization cannot be renamed");
         }
 
-        // Idempotent update
-        if (org.getName().equalsIgnoreCase(request.getName())) {
-            return ResponseEntity.ok(
-                    ApiResponse.of("Organization updated", toSummary(org))
-            );
+        if (!org.getName().equalsIgnoreCase(request.getName())) {
+            if (orgRepo.existsByName(request.getName())) {
+                throw new BusinessException("An organization with that name already exists");
+            }
+            org.setName(request.getName());
+            log.info("Organization renamed | orgId={} newName={}", org.getId(), request.getName());
         }
 
-        if (orgRepo.existsByName(request.getName())) {
-            throw new BusinessException("An organization with that name already exists");
+        // SYSTEM 08 TASK 8.3.d: org-admin MFA-required toggle. Null means "leave unchanged" (see
+        // UpdateOrganizationRequest's javadoc) -- only write and audit when the caller actually
+        // sent a value AND it's actually changing.
+        if (request.getMfaRequired() != null && request.getMfaRequired() != org.isMfaRequired()) {
+            boolean previous = org.isMfaRequired();
+            org.setMfaRequired(request.getMfaRequired());
+            auditService.record(AuditEventRequest.builder()
+                    .action(AuditAction.ORG_MFA_POLICY_CHANGED)
+                    .resourceType(AuditResourceType.ORGANIZATION)
+                    .resourceId(org.getId().toString())
+                    .organizationIdOverride(org.getId())
+                    .actorUserIdOverride(principal.getId())
+                    .beforeState(java.util.Map.of("mfaRequired", String.valueOf(previous)))
+                    .afterState(java.util.Map.of("mfaRequired", String.valueOf(org.isMfaRequired())))
+                    .build());
+            log.info("Organization MFA policy changed | orgId={} mfaRequired={} -> {}",
+                    org.getId(), previous, org.isMfaRequired());
         }
 
-        org.setName(request.getName());
         orgRepo.save(org);
-
-        log.info("Organization renamed | orgId={} newName={}",
-                org.getId(), request.getName());
-
         return ResponseEntity.ok(
                 ApiResponse.of("Organization updated", toSummary(org))
         );

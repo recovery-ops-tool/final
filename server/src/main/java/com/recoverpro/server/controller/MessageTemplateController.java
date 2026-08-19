@@ -1,11 +1,13 @@
 package com.recoverpro.server.controller;
 
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.entity.MessageTemplate;
 import com.recoverpro.server.enums.Channel;
 import com.recoverpro.server.enums.MessageTemplateStatus;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.MessageTemplateService;
@@ -40,7 +42,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MessageTemplateController {
 
-    private static final String READERS = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
+    private static final String READERS = Authz.LEADS;
+    private static final String ADMINS = Authz.ADMINS;
 
     private final MessageTemplateService messageTemplateService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
@@ -61,7 +64,8 @@ public class MessageTemplateController {
 
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(
                 messageTemplateService.findAll(effectiveOrgId, status, channel,
-                        PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "templateKey"))))));
+                        PageRequest.of(page, size,
+                                SafeSort.withIdTiebreaker(Sort.by(Sort.Direction.ASC, "templateKey")))))));
     }
 
     @GetMapping("/{id}")
@@ -97,7 +101,7 @@ public class MessageTemplateController {
     }
 
     @PostMapping("/{id}/submit-for-dlt")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<MessageTemplate>> submitForDlt(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -107,7 +111,7 @@ public class MessageTemplateController {
     }
 
     @PostMapping("/{id}/activate")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<MessageTemplate>> activate(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -117,7 +121,7 @@ public class MessageTemplateController {
     }
 
     @PostMapping("/{id}/retire")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<MessageTemplate>> retire(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

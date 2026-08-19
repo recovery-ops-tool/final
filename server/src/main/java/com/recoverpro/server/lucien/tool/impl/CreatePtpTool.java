@@ -57,7 +57,7 @@ public class CreatePtpTool implements LucienTool {
 
     @Override
     public String execute(JsonNode args, UserPrincipal principal) {
-        orgIsolationGuard.belongsToOrg(principal.getOrganizationId());
+        orgIsolationGuard.assertBelongsToOrg(principal.getOrganizationId());
         try {
             CreatePtpRequest req = CreatePtpRequest.builder()
                     .allocationId(UUID.fromString(args.get("allocationId").asText()))

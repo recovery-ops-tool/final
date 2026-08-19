@@ -29,7 +29,7 @@ public class AgentContextServiceImpl implements AgentContextService {
     private final AllocationRepository allocationRepository;
 
     @Override
-    @Cacheable(cacheNames = "lucienContext", key = "#sessionId")
+    @Cacheable(cacheNames = "lucienContext", key = "#sessionId", sync = true)
     public AgentContextDto buildContext(String sessionId, UUID agentId, String agentFirstName) {
         log.debug("Building context for agentId={} sessionId={}", agentId, sessionId);
 

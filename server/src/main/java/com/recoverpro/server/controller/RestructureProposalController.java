@@ -9,6 +9,7 @@ import com.recoverpro.server.dto.request.RestructureRejectRequest;
 import com.recoverpro.server.dto.response.RestructureProposalResponse;
 import com.recoverpro.server.enums.RestructureStatus;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.RestructureProposalService;
 import jakarta.validation.Valid;
@@ -31,12 +32,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RestructureProposalController {
 
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
-    private static final String LEADS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
-    private static final String LENDER =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')";
+    private static final String READERS = Authz.ALL_STAFF;
+    private static final String LEADS = Authz.LEADS;
+    private static final String LENDER = Authz.ADMINS;
 
     private final RestructureProposalService restructureProposalService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
@@ -91,7 +89,7 @@ public class RestructureProposalController {
     @PreAuthorize(LEADS)
     public ResponseEntity<ApiResponse<RestructureProposalResponse>> borrowerAccept(
             @PathVariable UUID id,
-            @RequestBody(required = false) RestructureBorrowerAcceptRequest request,
+            @Valid @RequestBody(required = false) RestructureBorrowerAcceptRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         elevateIfPlatformAdmin(principal, "restructureProposals:borrowerAccept:" + id);

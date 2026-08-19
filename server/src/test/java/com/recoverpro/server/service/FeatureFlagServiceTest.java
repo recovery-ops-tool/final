@@ -5,6 +5,7 @@ import com.recoverpro.server.entity.FeatureFlag;
 import com.recoverpro.server.entity.OrgSubscription;
 import com.recoverpro.server.repository.FeatureFlagRepository;
 import com.recoverpro.server.repository.OrgSubscriptionRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,9 +17,15 @@ import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -46,7 +53,9 @@ class FeatureFlagServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new FeatureFlagService(repository, redis, auditLogService, auditService, orgSubscriptionRepository);
+        service = new FeatureFlagService(repository, redis, auditLogService, auditService,
+                orgSubscriptionRepository, new SimpleMeterRegistry());
+        service.initStampedeGuard();
         // findGlobalByFlagKey is never reached here: every scenario below passes a real orgId,
         // and set()/setLimit() only consult the global row when organizationId is null.
         // lenient(): the PAST_DUE no-op case deliberately never reaches either of these calls
@@ -219,6 +228,51 @@ class FeatureFlagServiceTest {
                 .thenReturn(Optional.of(FeatureFlag.builder().flagKey(flagKey).enabled(false).build()));
 
         assertThat(service.isEnabled(orgId, flagKey, false)).isFalse();
+    }
+
+    /**
+     * SYSTEM-PLAN 15.3.b: {@code isEnabled} is named explicitly in the task text ("feature-flag
+     * resolution") as an expensive entry needing stampede protection. Unlike userDetails/
+     * lucienContext/systemPrompts it isn't behind Spring's cache abstraction at all -- it's a
+     * hand-rolled Redis-then-DB lookup (SYSTEM 20 TASK 20.3) -- so the fix is the in-process
+     * {@code stampedeGuard} Caffeine layer added this session. This proves N callers racing on the
+     * same never-before-cached org+flagKey collapse onto one DB read, not N.
+     */
+    @Test
+    void isEnabled_concurrentColdKey_collapsesToOneDbResolution() throws Exception {
+        UUID orgId = UUID.randomUUID();
+        String flagKey = PlanFeatureMatrix.LUCIEN_AI;
+        int threads = 10;
+
+        ValueOperations<String, String> valueOps = org.mockito.Mockito.mock(ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get(any())).thenReturn(null); // always a Redis miss
+
+        when(repository.findByOrganizationIdAndFlagKey(eq(orgId), eq(flagKey))).thenAnswer(inv -> {
+            Thread.sleep(50); // widen the race window
+            return Optional.of(FeatureFlag.builder().flagKey(flagKey).enabled(true).build());
+        });
+
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch go = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        List<Future<Boolean>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            futures.add(pool.submit(() -> {
+                ready.countDown();
+                go.await();
+                return service.isEnabled(orgId, flagKey, false);
+            }));
+        }
+        ready.await();
+        go.countDown();
+
+        for (Future<Boolean> f : futures) {
+            assertThat(f.get(5, TimeUnit.SECONDS)).isTrue();
+        }
+        pool.shutdown();
+
+        verify(repository, org.mockito.Mockito.times(1)).findByOrganizationIdAndFlagKey(eq(orgId), eq(flagKey));
     }
 
     @Test

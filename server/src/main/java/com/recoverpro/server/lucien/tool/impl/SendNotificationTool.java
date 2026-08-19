@@ -52,7 +52,7 @@ public class SendNotificationTool implements LucienTool {
 
     @Override
     public String execute(JsonNode args, UserPrincipal principal) {
-        orgIsolationGuard.belongsToOrg(principal.getOrganizationId());
+        orgIsolationGuard.assertBelongsToOrg(principal.getOrganizationId());
         try {
             UUID recipientId = UUID.fromString(args.get("recipientId").asText());
             NotificationType type = NotificationType.valueOf(args.get("notificationType").asText());

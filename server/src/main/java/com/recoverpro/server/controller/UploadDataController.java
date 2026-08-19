@@ -8,6 +8,7 @@ import com.recoverpro.server.dto.response.UploadDataResponse;
 import com.recoverpro.server.dto.response.UploadRowResponse;
 import com.recoverpro.server.entity.FileUpload;
 import com.recoverpro.server.repository.FileUploadRepository;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.UploadDataService;
@@ -24,7 +25,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/file-uploads/{uploadId}")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')")
+@PreAuthorize(Authz.LEADS)
 public class UploadDataController {
 
     private final UploadDataService uploadDataService;

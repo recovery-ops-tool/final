@@ -1,0 +1,13 @@
+[Unit]
+Description=RecoverPro nightly Postgres backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/recoverpro
+# Runs pg-backup.sh inside the postgres container -- it already has the AWS CLI
+# (ops/backup/postgres.Dockerfile) and the backup_agent credential (postgres
+# service's env_file: ./ops/backup/.env in docker-compose.yml). Nothing extra needed
+# on the host beyond docker compose itself.
+ExecStart=/usr/bin/docker compose exec -T postgres /backup-scripts/pg-backup.sh

@@ -11,6 +11,7 @@ import com.recoverpro.server.dto.request.ResolveGrievanceRequest;
 import com.recoverpro.server.dto.response.GrievanceResponse;
 import com.recoverpro.server.enums.GrievanceStatus;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.GrievanceService;
 import jakarta.validation.Valid;
@@ -33,12 +34,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class GrievanceController {
 
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
+    private static final String READERS = Authz.ALL_STAFF;
     private static final String RAISERS =
             "hasAnyRole('FO','CALLER','TL','MANAGER')";
-    private static final String HANDLERS =
-            "hasAnyRole('TL','MANAGER','ORG_ADMIN','PLATFORM_ADMIN')";
+    private static final String HANDLERS = Authz.LEADS;
 
     private final GrievanceService grievanceService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
@@ -58,7 +57,7 @@ public class GrievanceController {
     @PreAuthorize(HANDLERS)
     public ResponseEntity<ApiResponse<GrievanceResponse>> acknowledge(
             @PathVariable UUID id,
-            @RequestBody(required = false) AcknowledgeGrievanceRequest request,
+            @Valid @RequestBody(required = false) AcknowledgeGrievanceRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         elevateIfPlatformAdmin(principal, "grievances:acknowledge:" + id);
@@ -72,7 +71,7 @@ public class GrievanceController {
     @PreAuthorize(HANDLERS)
     public ResponseEntity<ApiResponse<GrievanceResponse>> investigate(
             @PathVariable UUID id,
-            @RequestBody(required = false) InvestigateGrievanceRequest request,
+            @Valid @RequestBody(required = false) InvestigateGrievanceRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         elevateIfPlatformAdmin(principal, "grievances:investigate:" + id);
@@ -86,7 +85,7 @@ public class GrievanceController {
     @PreAuthorize(HANDLERS)
     public ResponseEntity<ApiResponse<GrievanceResponse>> escalate(
             @PathVariable UUID id,
-            @RequestBody(required = false) EscalateGrievanceRequest request,
+            @Valid @RequestBody(required = false) EscalateGrievanceRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         elevateIfPlatformAdmin(principal, "grievances:escalate:" + id);

@@ -16,6 +16,7 @@ import com.recoverpro.server.enums.CollectionStatus;
 import com.recoverpro.server.enums.NotificationType;
 import com.recoverpro.server.enums.PaymentMode;
 import com.recoverpro.server.exception.IdempotencyKeyConflictException;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.CollectionLedgerService;
 import com.recoverpro.server.service.CollectionService;
@@ -56,14 +57,11 @@ public class CollectionController {
     private static final String SUBMITTERS =
             "hasAnyRole('FO')";
 
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
+    private static final String READERS = Authz.ALL_STAFF;
 
-    private static final String LEADS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
+    private static final String LEADS = Authz.LEADS;
 
-    private static final String ADMINS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')";
+    private static final String ADMINS = Authz.ADMINS;
 
     private static final String IDEMPOTENCY_HEADER = "Idempotency-Key";
 

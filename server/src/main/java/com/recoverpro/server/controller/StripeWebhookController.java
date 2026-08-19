@@ -1,6 +1,7 @@
 package com.recoverpro.server.controller;
 
 import com.recoverpro.server.config.StripeConfig;
+import com.recoverpro.server.service.OpsAlertService;
 import com.recoverpro.server.service.StripeWebhookService;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
@@ -9,6 +10,8 @@ import com.stripe.model.StripeObject;
 import com.stripe.model.Subscription;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -40,6 +44,8 @@ public class StripeWebhookController {
 
     private final StripeConfig stripeConfig;
     private final StripeWebhookService stripeWebhookService;
+    private final OpsAlertService opsAlertService;
+    private final MeterRegistry meterRegistry;
 
     @PostMapping
     public ResponseEntity<String> handle(
@@ -53,10 +59,12 @@ public class StripeWebhookController {
             event = Webhook.constructEvent(payload, sigHeader, stripeConfig.getWebhookSecret());
         } catch (SignatureVerificationException e) {
             log.warn("Stripe webhook signature verification failed: {}", e.getMessage());
+            webhookCounter("invalid_signature").increment();
             return ResponseEntity.badRequest().body("Invalid signature");
         }
 
         if (!stripeWebhookService.claimEvent(event.getId(), event.getType())) {
+            webhookCounter("duplicate").increment();
             return ResponseEntity.ok("Duplicate event, already processed");
         }
 
@@ -64,11 +72,12 @@ public class StripeWebhookController {
         if (dataObject.isEmpty()) {
             log.error("Could not deserialize Stripe event {} (type={}) -- API version mismatch",
                     event.getId(), event.getType());
+            webhookCounter("deserialization_skipped").increment();
             return ResponseEntity.ok("Event acknowledged, deserialization skipped");
         }
 
         try {
-            dispatch(event.getType(), dataObject.get());
+            dispatch(event.getType(), dataObject.get(), event.getCreated());
         } catch (Exception e) {
             log.error("Error handling Stripe event {} (type={}): {}",
                     event.getId(), event.getType(), e.getMessage(), e);
@@ -76,12 +85,28 @@ public class StripeWebhookController {
             // response) can re-claim and re-attempt instead of hitting the "already
             // processed" short-circuit above and this failure being silently permanent.
             stripeWebhookService.releaseEventClaim(event.getId());
+            // Money-critical: if Stripe's own retries also exhaust, this is the only signal an
+            // operator gets that a subscription/payment never actually landed.
+            opsAlertService.alertJobFailure("StripeWebhookController.dispatch",
+                    "event=" + event.getId() + " type=" + event.getType(), e);
+            webhookCounter("failed").increment();
             return ResponseEntity.status(500).body("Processing failed, will retry");
         }
+        webhookCounter("processed").increment();
         return ResponseEntity.ok("Processed");
     }
 
-    private void dispatch(String eventType, StripeObject dataObject) {
+    /** SYSTEM 12 TASK 12.2: payment_webhook_events_total{provider, outcome}. */
+    private Counter webhookCounter(String outcome) {
+        return Counter.builder("payment_webhook_events_total")
+                .tag("provider", "stripe")
+                .tag("outcome", outcome)
+                .register(meterRegistry);
+    }
+
+    private void dispatch(String eventType, StripeObject dataObject, Long eventCreatedEpochSeconds) {
+        Instant eventCreatedAt = eventCreatedEpochSeconds == null
+                ? null : Instant.ofEpochSecond(eventCreatedEpochSeconds);
         switch (eventType) {
             case "checkout.session.completed" -> {
                 if (dataObject instanceof Session session) {
@@ -90,12 +115,12 @@ public class StripeWebhookController {
             }
             case "customer.subscription.created", "customer.subscription.updated" -> {
                 if (dataObject instanceof Subscription subscription) {
-                    stripeWebhookService.handleSubscriptionUpserted(subscription);
+                    stripeWebhookService.handleSubscriptionUpserted(subscription, eventCreatedAt);
                 }
             }
             case "customer.subscription.deleted" -> {
                 if (dataObject instanceof Subscription subscription) {
-                    stripeWebhookService.handleSubscriptionDeleted(subscription);
+                    stripeWebhookService.handleSubscriptionDeleted(subscription, eventCreatedAt);
                 }
             }
             case "invoice.paid" -> {

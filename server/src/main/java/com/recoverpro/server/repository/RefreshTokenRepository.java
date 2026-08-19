@@ -52,6 +52,18 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
     @Query("UPDATE RefreshToken rt SET rt.revoked = true, rt.revokedAt = :now WHERE rt.user.id = :userId AND rt.revoked = false")
     void revokeAllByUserId(@Param("userId") UUID userId, @Param("now") Instant now);
 
+    /** SYSTEM 08 TASK 8.2.c: "log out every other device, stay signed in here." Deliberately
+     *  scoped by deviceId, not by the presenting refresh token's own id -- the caller may be
+     *  acting from a valid ACCESS token (no refresh token in hand at all for this request), so
+     *  there is no single row to naturally exclude by id the way {@link #revokeIfActive} does. */
+    @Modifying
+    @Query("UPDATE RefreshToken rt SET rt.revoked = true, rt.revokedAt = :now "
+            + "WHERE rt.user.id = :userId AND rt.revoked = false "
+            + "AND (rt.deviceId IS NULL OR rt.deviceId <> :currentDeviceId)")
+    int revokeAllByUserIdExceptDevice(@Param("userId") UUID userId,
+                                       @Param("currentDeviceId") String currentDeviceId,
+                                       @Param("now") Instant now);
+
     @Modifying
     @Query("UPDATE RefreshToken rt SET rt.revoked = true, rt.revokedAt = :now WHERE rt.tokenHash = :hash AND rt.revoked = false")
     int revokeIfActive(@Param("hash") String hash, @Param("now") Instant now);

@@ -1,5 +1,7 @@
 package com.recoverpro.server.controller;
 
+import com.recoverpro.server.dto.request.ChangePlanRequest;
+import com.recoverpro.server.dto.request.GrantCompRequest;
 import com.recoverpro.server.entity.Organization;
 import com.recoverpro.server.entity.OrgSubscription;
 import com.recoverpro.server.repository.OrgSubscriptionRepository;
@@ -23,12 +25,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -76,7 +82,10 @@ class PlatformSubscriptionControllerTest {
         when(subRepo.findByOrgId(orgId)).thenReturn(Optional.empty());
         when(subRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        controller.grantComp(orgId, java.util.Map.of("plan", "GROWTH", "reason", "pilot customer"), caller);
+        GrantCompRequest req = new GrantCompRequest();
+        req.setPlan("GROWTH");
+        req.setReason("pilot customer");
+        controller.grantComp(orgId, req, caller);
 
         verify(auditLogService).logUserAction(any(), eq("ORG_SUBSCRIPTION_COMPED"), contains("pilot customer"));
     }
@@ -99,7 +108,9 @@ class PlatformSubscriptionControllerTest {
         when(subRepo.findByOrgId(orgId)).thenReturn(Optional.of(sub));
         when(subRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        controller.changePlan(orgId, java.util.Map.of("plan", "STARTER"), caller);
+        ChangePlanRequest req = new ChangePlanRequest();
+        req.setPlan("STARTER");
+        controller.changePlan(orgId, req, caller);
 
         verify(auditLogService).logUserAction(any(), eq("ORG_SUBSCRIPTION_PLAN_FORCED"), anyString());
     }
@@ -111,5 +122,48 @@ class PlatformSubscriptionControllerTest {
         controller.backfillInvoices(caller);
 
         verify(auditLogService).logUserAction(any(), eq("PLATFORM_INVOICE_BACKFILL"), anyString());
+    }
+
+    // ─── SYSTEM 18 TASK 18.2.a: trial extension ────────────────────────────────
+
+    @Test
+    void extendTrial_subscriptionInTrial_extendsFromExistingEndDateAndAudits() {
+        java.time.Instant currentEnd = java.time.Instant.now().plusSeconds(3600); // 1h from now, still future
+        OrgSubscription sub = OrgSubscription.builder().orgId(orgId)
+                .status(OrgSubscription.Status.TRIAL).trialEndsAt(currentEnd).build();
+        when(subRepo.findByOrgId(orgId)).thenReturn(Optional.of(sub));
+        when(subRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        com.recoverpro.server.dto.request.ExtendTrialRequest req =
+                new com.recoverpro.server.dto.request.ExtendTrialRequest();
+        req.setAdditionalDays(7);
+        req.setReason("customer requested more evaluation time");
+
+        controller.extendTrial(orgId, req, caller);
+
+        // Compounds from the EXISTING end date, not from "now" -- extending twice must not lose
+        // the first extension.
+        assertThat(sub.getTrialEndsAt()).isEqualTo(currentEnd.plus(7, java.time.temporal.ChronoUnit.DAYS));
+        verify(auditLogService).logUserAction(any(), eq("ORG_TRIAL_EXTENDED"),
+                contains("customer requested more evaluation time"));
+        verify(auditService).record(argThat(evt ->
+                evt.getAction() == com.recoverpro.server.enums.AuditAction.ORG_TRIAL_EXTENDED));
+    }
+
+    @Test
+    void extendTrial_subscriptionNotInTrial_throwsAndDoesNotSave() {
+        OrgSubscription sub = OrgSubscription.builder().orgId(orgId)
+                .status(OrgSubscription.Status.ACTIVE).build();
+        when(subRepo.findByOrgId(orgId)).thenReturn(Optional.of(sub));
+
+        com.recoverpro.server.dto.request.ExtendTrialRequest req =
+                new com.recoverpro.server.dto.request.ExtendTrialRequest();
+        req.setAdditionalDays(7);
+        req.setReason("mistaken request");
+
+        assertThatThrownBy(() -> controller.extendTrial(orgId, req, caller))
+                .isInstanceOf(com.recoverpro.server.common.exception.BusinessException.class)
+                .hasMessageContaining("TRIAL");
+        verify(subRepo, never()).save(any());
     }
 }

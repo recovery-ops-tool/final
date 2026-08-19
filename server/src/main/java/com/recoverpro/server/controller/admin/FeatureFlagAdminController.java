@@ -4,6 +4,7 @@ import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.dto.request.SetFeatureFlagRequest;
 import com.recoverpro.server.dto.response.FeatureFlagAdminResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.FeatureFlagService;
@@ -35,8 +36,10 @@ public class FeatureFlagAdminController {
     private final FeatureFlagService featureFlagService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
 
+    private static final String ADMINS = Authz.ADMINS;
+
     @GetMapping
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<List<FeatureFlagAdminResponse>>> list(
             @RequestParam(required = false) UUID organizationId,
             @RequestParam(required = false) String reason,
@@ -56,7 +59,7 @@ public class FeatureFlagAdminController {
     }
 
     @PutMapping
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<String>> set(
             @Valid @RequestBody SetFeatureFlagRequest request,
             @AuthenticationPrincipal UserPrincipal caller) {
@@ -74,7 +77,7 @@ public class FeatureFlagAdminController {
     }
 
     @DeleteMapping("/{flagKey}")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<String>> deleteOverride(
             @PathVariable String flagKey,
             @RequestParam(required = false) UUID organizationId,

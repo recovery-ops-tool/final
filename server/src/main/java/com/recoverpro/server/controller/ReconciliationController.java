@@ -1,5 +1,6 @@
 package com.recoverpro.server.controller;
 
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
@@ -7,6 +8,7 @@ import com.recoverpro.server.dto.request.IngestStatementRequest;
 import com.recoverpro.server.dto.response.BankStatementRowResponse;
 import com.recoverpro.server.dto.response.ReconciliationRunResponse;
 import com.recoverpro.server.enums.ReconciliationOutcome;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.ReconciliationService;
@@ -41,8 +43,10 @@ public class ReconciliationController {
     private final ReconciliationService reconciliationService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
 
+    private static final String ADMINS = Authz.ADMINS;
+
     @PostMapping("/runs")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<ReconciliationRunResponse>> ingest(
             @Valid @RequestBody IngestStatementRequest request,
             @RequestParam(required = false) String reason,
@@ -56,7 +60,7 @@ public class ReconciliationController {
     }
 
     @GetMapping("/runs")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<PagedResponse<ReconciliationRunResponse>>> listRuns(
             @RequestParam UUID orgId,
             @RequestParam(required = false) String reason,
@@ -65,12 +69,13 @@ public class ReconciliationController {
             @AuthenticationPrincipal UserPrincipal principal) {
         authorizeOrgAccess(principal, orgId, reason, "reconciliation:listRuns");
         Page<ReconciliationRunResponse> result = reconciliationService.listRuns(
-                orgId, PageRequest.of(page, Math.min(size, 50), Sort.by("createdAt").descending()));
+                orgId, PageRequest.of(page, Math.min(size, 50),
+                        SafeSort.withIdTiebreaker(Sort.by("createdAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 
     @GetMapping("/runs/{id}")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<ReconciliationRunResponse>> getRun(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -83,7 +88,7 @@ public class ReconciliationController {
     }
 
     @GetMapping("/runs/{id}/rows")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<PagedResponse<BankStatementRowResponse>>> listRows(
             @PathVariable UUID id,
             @RequestParam(required = false) ReconciliationOutcome outcome,
@@ -97,7 +102,8 @@ public class ReconciliationController {
         }
         int cappedSize = Math.min(size, 100);
         Page<BankStatementRowResponse> result = reconciliationService.listRows(
-                id, outcome, PageRequest.of(page, cappedSize, Sort.by("createdAt").ascending()));
+                id, outcome, PageRequest.of(page, cappedSize,
+                        SafeSort.withIdTiebreaker(Sort.by("createdAt").ascending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 

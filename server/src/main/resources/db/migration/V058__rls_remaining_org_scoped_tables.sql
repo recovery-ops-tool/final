@@ -43,6 +43,17 @@ ALTER TABLE user_creation_requests FORCE ROW LEVEL SECURITY;
 CREATE POLICY rls_user_creation_requests_isolation ON user_creation_requests
     USING (organization_id = current_org_id());
 
+-- SYSTEM 03 TASK 3.1 correction (added 2026-08-18, applied checksum repaired via `flyway repair`):
+-- neither friday_chat_sessions (V001) nor its rename to lucien_chat_sessions (V003) ever had an
+-- organization_id column, and no migration between V003 and this one added it -- a truly fresh
+-- `flyway migrate` from V001 failed here with "column organization_id does not exist", caught by
+-- running the full chain against a scratch database (see docs/RUNBOOK-DEPLOY.md). Every environment
+-- that had already applied this migration successfully only worked because the column was present
+-- through undocumented manual drift, not through any tracked migration. Adding it here, defensively
+-- and idempotently, makes this migration self-sufficient instead of depending on that drift.
+ALTER TABLE lucien_chat_sessions ADD COLUMN IF NOT EXISTS organization_id UUID;
+ALTER TABLE lucien_chat_messages ADD COLUMN IF NOT EXISTS organization_id UUID;
+
 ALTER TABLE lucien_chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lucien_chat_sessions FORCE ROW LEVEL SECURITY;
 CREATE POLICY rls_lucien_chat_sessions_isolation ON lucien_chat_sessions

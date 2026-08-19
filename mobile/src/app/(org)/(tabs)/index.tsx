@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { View, Image, Alert } from 'react-native';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import { View, Image, Alert, Animated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
@@ -163,21 +163,10 @@ export default function HomeScreen() {
         </View>
 
         <View style={{ marginBottom: spacing.s6, position: 'relative' }}>
-          {/* Exact Dot Pattern (4x4) */}
-          <View style={{ position: 'absolute', top: 0, right: 0 }}>
-            {[0, 1, 2, 3].map(row => (
-              <View key={`row-${row}`} style={{ flexDirection: 'row', gap: 6, marginBottom: row < 3 ? 6 : 0 }}>
-                {[0, 1, 2, 3].map(col => (
-                  <View key={`col-${col}`} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBE1D4' }}/>
-                ))}
-              </View>
-            ))}
-          </View>
-          
           <Text variant="body" style={{ color: '#4B5563', marginBottom: 2 }}>Welcome back,</Text>
           <Text 
             style={{ 
-              color: '#0AA550', 
+              color: '#111827', 
               fontFamily: 'Inter_700Bold', 
               fontSize: 32,
               lineHeight: 40,

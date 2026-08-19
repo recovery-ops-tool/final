@@ -132,20 +132,84 @@ test above, together covering both the DB write and the cache-invalidation halve
 an instance-local one, which it already is — not re-verified against a live multi-instance
 deployment this session (no such environment exists yet, see `docs/INFRA-CURRENT.md`).
 
-## Deferred — not done this session
+## TASK 20.4 — Limit enforcement completeness [DONE, 4 of 5 named resources] (2026-08-19 session)
 
-- **TASK 20.4 (limit enforcement completeness)** — P1. File uploads/month, report generations,
-  Lucien AI interactions, API requests, and storage are not yet metered or capped. Not started.
+Task text names five resources to meter/cap: file uploads/month, report generations, Lucien AI
+interactions, API requests, storage.
 
-Per the tasklist's own rollup rule, SYSTEM 20's rollup checkbox is left unchecked — 3 of 4 tasks
-done (20.1, 20.2 as a recorded decision rather than a code change, 20.3), 1 deferred (P1).
+**Implemented — four new plan-derived limit keys added to `PlanFeatureMatrix.ALL_LIMIT_KEYS`**
+(`FILE_UPLOADS_PER_MONTH`, `STORAGE_BYTES`, `REPORT_GENERATIONS_PER_MONTH`,
+`LUCIEN_MONTHLY_TOKEN_LIMIT`), each enforced at the entry point before the expensive work per
+20.4.c, each returning a `BusinessException`/`RateLimitExceededException` naming the specific limit
+and the upgrade path per 20.4.d:
+
+- **File uploads/month + storage** — `EntitlementService.canUploadFile()` /
+  `canUseStorage(orgId, additionalBytes)`, both backed by live queries against `FileUpload`
+  (`FileUploadRepository`'s two new count/sum-since queries — no maintained counter, same reasoning
+  as `EntitlementServiceImpl`'s class javadoc). Checked in `FileUploadServiceImpl.initiateUpload()`
+  before `fileValidationService.validateFile()` — the cheapest possible rejection point, ahead of
+  hashing, storage, and async processing. Storage's sum excludes soft-deleted rows because
+  `softDeleteFileUpload()` genuinely reclaims the underlying object via `FileStorageService.delete()`.
+- **Report generations/month** — `EntitlementService.canGenerateReport()`, backed by a live count
+  against `ReportJob` (new `ReportJobRepository.countByOrganizationIdAndCreatedAtAfter`). Checked
+  first thing in `ReportingServiceImpl.enqueueReport()`, ahead of the existing
+  already-queued/already-generating check and any DB write.
+- **Lucien AI interactions** — a real per-org monthly cap already existed
+  (`LucienTokenBudgetServiceImpl`, checked in `LucienServiceImpl.chat()` and `.ambientTurn()`
+  before the model call, which also covers `/help` and `/ambient-turn` since they share that
+  method) but was **not actually "capped per plan"**: `monthlyLimit` was a single flat `@Value`
+  number applied identically to every org regardless of plan. Rewired to resolve
+  `PlanFeatureMatrix.LUCIEN_MONTHLY_TOKEN_LIMIT` per-org through `EntitlementService.getLimit()`,
+  same as the other three. Kept the existing Redis counter mechanism (a monthly token count is a
+  natural INCR, not a cheap COUNT query like the others) and added a genuinely new, separate
+  `lucien.token-budget.enabled` ops kill-switch, decoupled from the numeric cap it previously also
+  served as (0 used to mean "disabled"; now 0 in `PlanFeatureMatrix` for STARTER/NONE just reflects
+  those plans not having `LUCIEN_AI` at all, so the check is unreachable for them regardless).
+  GROWTH's value (1,000,000) isn't a new guess -- it's the flat default this class already shipped
+  with, now scoped to the one plan it used to apply to universally. ENTERPRISE stays unlimited,
+  matching the same already-established convention `MAX_USERS`/`MAX_ACTIVE_LOANS` use (an empty
+  `LIMITS` entry for Enterprise = unlimited for every key, a business decision from a prior session,
+  not one made here).
+- Provisioning, caching, and cache-invalidation for all four new keys come for free: they're just
+  entries in `ALL_LIMIT_KEYS`, which `FeatureFlagService.provisionFlagsFor()` already iterates
+  generically -- no new plumbing needed on top of SYSTEM 20 TASK 20.3's existing subscription-change
+  wiring.
+
+**Not implemented — "API requests"**: confirmed (same grep TASK 20.2 already ran for
+`CUSTOM_INTEGRATIONS`) there is no developer/external API surface in this codebase distinct from
+the web/mobile app's own authenticated calls -- no API-key controller, no webhook-config
+controller, nothing SYSTEM 24/31/36 would eventually provide. "Capping API requests" for the
+product's *own* frontend traffic would be general request throttling/API-gateway scope, not a
+per-plan entitlement in the same sense as the other four (each of which is a distinct,
+separately-metered cost driver). Recorded here rather than building a limit key with nothing real
+to gate, mirroring TASK 20.2's own precedent for CUSTOM_INTEGRATIONS: flagged for whenever SYSTEM
+36 (or a general API-key/rate-limit system) actually exists, not decided unilaterally now.
+
+**Tests added**: `EntitlementServiceImplTest` (+8: unlimited/at-limit/below-limit for each of the
+three new boolean methods), `FileUploadServiceImplTest` (new file -- both new checks, asserting no
+validation/storage/DB work happens on rejection), `ReportingServiceImplEnqueueReportTest` (+1:
+rejection before any write), `LucienTokenBudgetServiceImplTest` (new file -- this class had no
+prior test at all: unlimited-plan skip, at-cap rejection with the new message, the enabled
+kill-switch, and that `recordUsage` still tracks usage even for an unlimited-plan org).
+
+**ACCEPTANCE** (as narrowed to four of five resources, API requests recorded as not-yet-applicable
+above): each metered resource returns a specific limit-exceeded error naming the limit and upgrade
+path — met for all four. Lucien AI usage is capped per plan — met (was previously capped
+identically for every plan, now genuinely plan-derived).
+
+Per the tasklist's own rollup rule, SYSTEM 20's rollup checkbox is now `[x]` — all 4 tasks
+addressed (20.1 done, 20.2 a recorded decision, 20.3 done, 20.4 done for 4/5 named resources with
+the 5th explicitly recorded as not-yet-applicable, not silently skipped).
 
 ## Verification
 
 `mvn -f server/pom.xml clean test-compile` — clean.
 
 SYSTEM 20's own specified command, `mvn -f server/pom.xml test -Dtest='*Entitlement*Test,*Feature*Test,*Plan*Test'`
-— 35/35 passed.
+— 35/35 passed (2026-08-18 session, TASKs 20.1-20.3). TASK 20.4's targeted run (`EntitlementServiceImplTest,
+LucienTokenBudgetServiceImplTest,FileUploadServiceImplTest,ReportingServiceImplEnqueueReportTest,
+ReportingServiceImplBankReconciliationTest,RequiresFeatureAspectTest,FeatureFlagServiceTest,LucienServiceImplTest`)
+— 51/51 passed.
 
 Full `mvn -f server/pom.xml clean test` — see session's final report for the run following this
 record's creation.

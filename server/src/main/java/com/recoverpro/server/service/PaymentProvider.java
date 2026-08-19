@@ -53,4 +53,16 @@ public interface PaymentProvider {
      *  that mapping is provider-specific. */
     RefundResult refundPayment(String providerPaymentRef, Long amountMinorUnits, String reason)
             throws PaymentProviderException;
+
+    /**
+     * SYSTEM 19 TASK 19.4: the provider's own current, authoritative subscription status (Stripe's
+     * raw string -- "active"/"past_due"/"canceled"/...; Razorpay's -- "active"/"halted"/
+     * "cancelled"/...), fetched live rather than read from any local mirror. Used only by
+     * {@code BillingReconciliationJob} to detect drift between what this app believes and what the
+     * provider actually has on file -- deliberately returns the raw string, not this app's
+     * {@code OrgSubscription.Status}, so the reconciliation job can log/alert with the exact value
+     * a human would see if they opened the provider's own dashboard, not a lossy re-encoding of it.
+     * Empty when the org has no provider subscription linked yet.
+     */
+    java.util.Optional<String> fetchRemoteStatus(UUID orgId) throws PaymentProviderException;
 }

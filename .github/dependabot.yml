@@ -1,0 +1,34 @@
+# SYSTEM 06 TASK 6.3: continuous dependency vulnerability alerting for every ecosystem in this
+# repo. Chosen over the OWASP dependency-check Maven plugin (the task's other allowed option) --
+# OWASP's plugin pulls the full NVD CVE database on every run and, without a paid/registered
+# NVD API key configured as a CI secret (not available in this environment), is well known to hit
+# NVD's public rate limits hard enough to make CI runs slow or outright fail. Dependabot is
+# GitHub-native, has no external rate-limit dependency, and needs no extra secret to work.
+#
+# This alone does not fail a build -- see .github/workflows/dependency-review.yml for the
+# PR-blocking half of TASK 6.3 (a new dependency introduced at HIGH/CRITICAL severity fails the
+# check). Dependabot's job is the continuous side: catching a vulnerability disclosed *after* a
+# dependency was already merged, which a point-in-time PR check can never do.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /server
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+
+  # Keep the actions referenced by our own workflows (actions/checkout, setup-java, etc.) patched
+  # too -- a pinned Action version can carry its own supply-chain risk.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

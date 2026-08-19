@@ -14,6 +14,7 @@ import com.recoverpro.server.repository.CollectionRepository;
 import com.recoverpro.server.repository.MonthlyLoanBookSnapshotRepository;
 import com.recoverpro.server.repository.NpaRecordRepository;
 import com.recoverpro.server.repository.ReportJobRepository;
+import com.recoverpro.server.service.EntitlementService;
 import com.recoverpro.server.service.ExportService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ class ReportingServiceImplBankReconciliationTest {
     @Mock private AllocationRepository allocationRepository;
     @Mock private NpaRecordRepository npaRecordRepository;
     @Mock private ReportJobExecutor reportJobExecutor;
+    @Mock private EntitlementService entitlementService;
 
     private ReportingServiceImpl service;
     private UUID orgId;
@@ -55,7 +57,8 @@ class ReportingServiceImplBankReconciliationTest {
     void setUp() {
         service = new ReportingServiceImpl(agentSnapshotRepository, loanBookSnapshotRepository,
                 reportJobRepository, reportMapper, exportService, new ObjectMapper(),
-                collectionRepository, allocationRepository, npaRecordRepository, reportJobExecutor);
+                collectionRepository, allocationRepository, npaRecordRepository, reportJobExecutor,
+                entitlementService);
         orgId = UUID.randomUUID();
         allocationId = UUID.randomUUID();
         lenient().when(npaRecordRepository.countGroupedByRiskLevel(any())).thenReturn(List.of());

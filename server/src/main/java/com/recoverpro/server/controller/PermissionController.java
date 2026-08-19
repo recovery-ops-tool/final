@@ -2,6 +2,7 @@ package com.recoverpro.server.controller;
 
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.dto.response.PermissionResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.service.RoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,7 @@ public class PermissionController {
 
     /** GET /api/v1/permissions -- returns permissions the caller is allowed to assign */
     @GetMapping
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN', 'ORG_ADMIN') or hasAuthority('ROLE_ASSIGN')")
+    @PreAuthorize(Authz.ADMINS_OR_ROLE_ASSIGN)
     public ResponseEntity<ApiResponse<List<PermissionResponse>>> getAllPermissions() {
         return ResponseEntity.ok(ApiResponse.success(roleService.listPermissionsForCaller()));
     }

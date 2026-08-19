@@ -8,6 +8,7 @@ import com.recoverpro.server.dto.response.AuthSessionResponse;
 import com.recoverpro.server.entity.RefreshToken;
 import com.recoverpro.server.entity.User;
 import com.recoverpro.server.enums.AuditAction;
+import com.recoverpro.server.enums.AuditActorType;
 import com.recoverpro.server.enums.AuditResourceType;
 import com.recoverpro.server.enums.AuditResult;
 import com.recoverpro.server.enums.NotificationType;
@@ -15,8 +16,10 @@ import com.recoverpro.server.common.exception.ResourceNotFoundException;
 import com.recoverpro.server.exception.AccountDisabledException;
 import com.recoverpro.server.exception.AccountLockedException;
 import com.recoverpro.server.exception.InvalidTokenException;
+import com.recoverpro.server.exception.OrganizationSuspendedException;
 import com.recoverpro.server.mapper.UserMapper;
 import com.recoverpro.server.observability.BusinessMetrics;
+import com.recoverpro.server.repository.OrganizationRepository;
 import com.recoverpro.server.repository.RefreshTokenRepository;
 import com.recoverpro.server.security.RlsOrgIdHolder;
 import com.recoverpro.server.security.UserPrincipal;
@@ -24,6 +27,7 @@ import com.recoverpro.server.security.jwt.JwtTokenProvider;
 import com.recoverpro.server.service.AuditEventRequest;
 import com.recoverpro.server.service.AuditService;
 import com.recoverpro.server.service.NotificationService;
+import com.recoverpro.server.service.OpsAlertService;
 import com.recoverpro.server.service.RefreshTokenRotationService;
 import com.recoverpro.server.service.UserActionAuditService;
 import com.recoverpro.server.service.security.SessionAnomalyDetector;
@@ -50,6 +54,7 @@ import java.util.concurrent.TimeUnit;
 public class RefreshTokenRotationServiceImpl implements RefreshTokenRotationService {
 
     private final RefreshTokenRepository refreshTokenRepository;
+    private final OrganizationRepository organizationRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final SessionAnomalyDetector sessionAnomalyDetector;
@@ -60,6 +65,7 @@ public class RefreshTokenRotationServiceImpl implements RefreshTokenRotationServ
     private final AuditService auditService;
     private final BusinessMetrics metrics;
     private final NotificationService notificationService;
+    private final OpsAlertService opsAlertService;
 
     private static final String JWT_BLACKLIST_PREFIX = "jwt:blacklist:";
     private static final String USER_PROFILE_CACHE_PREFIX = "user:profile:";
@@ -140,11 +146,11 @@ public class RefreshTokenRotationServiceImpl implements RefreshTokenRotationServ
                 .orElse(null);
 
         if (stored == null) {
-            refreshTokenRepository.findByTokenPrefix(tokenPrefix)
+            boolean wasTheft = refreshTokenRepository.findByTokenPrefix(tokenPrefix)
                     .stream()
                     .filter(rt -> rt.isRevoked() && passwordEncoder.matches(rawToken, rt.getTokenHash()))
                     .findFirst()
-                    .ifPresent(rt -> {
+                    .map(rt -> {
                         UUID userId = rt.getUser().getId();
                         refreshTokenRepository.revokeAllByUserId(userId, Instant.now());
                         evictUserProfileCache(userId);
@@ -159,17 +165,41 @@ public class RefreshTokenRotationServiceImpl implements RefreshTokenRotationServ
                                 .build());
                         metrics.recordTokenTheftDetected();
                         log.error("SECURITY: Refresh token reuse detected for user {}. All sessions revoked.", userId);
-                    });
+                        return true;
+                    })
+                    .orElse(false);
+            // SYSTEM 08 TASK 8.4.b: the theft-replay sub-case above was already audited; a
+            // genuinely unknown/garbage/expired token (no user to attribute it to at all) was not
+            // -- same "no valid credentials" category JwtAuthenticationFilter's AUTH_UNAUTHORIZED
+            // already covers for the access-token side (SYSTEM 09 TASK 9.4.b), applied here for
+            // the refresh-token endpoint.
+            if (!wasTheft) {
+                auditService.record(AuditEventRequest.builder()
+                        .action(AuditAction.AUTH_UNAUTHORIZED)
+                        .resourceType(AuditResourceType.USER)
+                        .result(AuditResult.DENIED)
+                        .actorTypeOverride(AuditActorType.ANONYMOUS)
+                        .reason("Refresh token not found or expired")
+                        .build());
+            }
             throw new InvalidTokenException("Refresh token is invalid or expired");
         }
 
         User user = stored.getUser();
         if (!user.isEnabled()) {
             refreshTokenRepository.revokeAllByUserId(user.getId(), Instant.now());
+            auditFailedRefresh(user.getId(), "Account disabled");
             throw new AccountDisabledException("Account is disabled");
+        }
+        if (user.getOrganizationId() != null && !isOrganizationActive(user.getOrganizationId())) {
+            refreshTokenRepository.revokeAllByUserId(user.getId(), Instant.now());
+            auditFailedRefresh(user.getId(), "Organization suspended");
+            throw new OrganizationSuspendedException(
+                    "Your organization's access has been suspended. Contact your administrator.");
         }
         if (user.isCurrentlyLocked()) {
             long retryAfter = computeLockoutRetryAfter(user);
+            auditFailedRefresh(user.getId(), "Account locked");
             throw new AccountLockedException("Account locked. Try again in " + retryAfter + "s", retryAfter);
         }
 
@@ -240,7 +270,20 @@ public class RefreshTokenRotationServiceImpl implements RefreshTokenRotationServ
                             JWT_BLACKLIST_PREFIX + accessToken, "1", ttlMs, TimeUnit.MILLISECONDS);
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            // SYSTEM 13 TASK 13.2: was a silent no-op -- if this write fails (e.g. Redis down),
+            // the access token is never actually blacklisted and stays valid until natural expiry
+            // with zero trace that revocation failed. Deliberately does NOT rethrow: this method
+            // runs first inside logout()/logoutAllDevices()'s transaction, and the durable
+            // revocation (refresh token DB row, revoked further down in those methods) matters
+            // more than this ephemeral blacklist entry -- letting this exception propagate would
+            // roll back the whole transaction and leave the user NOT logged out at all, which is
+            // worse. Never logs the token itself (a live bearer credential).
+            log.error("Failed to blacklist access token on logout -- token remains valid until "
+                    + "natural expiry; refresh token revocation still proceeds", e);
+            opsAlertService.alertJobFailure("RefreshTokenRotationServiceImpl.blacklistToken",
+                    "access-token blacklist write failed, token stays valid until its own expiry", e);
+        }
     }
 
     @Override
@@ -262,6 +305,30 @@ public class RefreshTokenRotationServiceImpl implements RefreshTokenRotationServ
                         .current(currentDeviceId != null && currentDeviceId.equals(rt.getDeviceId()))
                         .build())
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public int revokeOtherSessions(UUID userId, String currentDeviceId) {
+        int revoked;
+        if (currentDeviceId == null || currentDeviceId.isBlank()) {
+            List<AuthSessionResponse> before = listSessions(userId, null);
+            refreshTokenRepository.revokeAllByUserId(userId, Instant.now());
+            revoked = before.size();
+        } else {
+            revoked = refreshTokenRepository.revokeAllByUserIdExceptDevice(
+                    userId, currentDeviceId, Instant.now());
+        }
+        evictUserProfileCache(userId);
+        auditLogService.logUserAction(userId, "SESSIONS_REVOKED_OTHERS",
+                "Revoked " + revoked + " other session(s)");
+        auditService.record(AuditEventRequest.builder()
+                .action(AuditAction.AUTH_SESSION_REVOKED)
+                .resourceType(AuditResourceType.USER)
+                .resourceId(userId.toString())
+                .metadata(java.util.Map.of("scope", "all-others", "count", String.valueOf(revoked)))
+                .build());
+        return revoked;
     }
 
     @Override
@@ -310,6 +377,26 @@ public class RefreshTokenRotationServiceImpl implements RefreshTokenRotationServ
 
     private void evictUserProfileCache(UUID userId) {
         redisTemplate.delete(USER_PROFILE_CACHE_PREFIX + userId);
+    }
+
+    private boolean isOrganizationActive(UUID organizationId) {
+        return organizationRepository.findById(organizationId)
+                .map(org -> org.isActive() && org.getDeletedAt() == null)
+                .orElse(true);
+    }
+
+    /** SYSTEM 08 TASK 8.4.b. AUTH_LOGIN_FAILED, not a refresh-specific action -- reusing the same
+     *  taxonomy entry AuthServiceImpl.login() already uses for the equivalent rejection reasons
+     *  (disabled/suspended/locked), since these represent the same underlying account states, just
+     *  observed at refresh time instead of at login time. */
+    private void auditFailedRefresh(UUID userId, String reason) {
+        auditService.record(AuditEventRequest.builder()
+                .action(AuditAction.AUTH_LOGIN_FAILED)
+                .resourceType(AuditResourceType.USER)
+                .resourceId(userId.toString())
+                .result(AuditResult.DENIED)
+                .reason(reason)
+                .build());
     }
 
     private String generateSecureToken() {

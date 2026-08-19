@@ -16,6 +16,7 @@ import com.recoverpro.server.enums.PtpStatus;
 import com.recoverpro.server.exception.IdempotencyKeyConflictException;
 import com.recoverpro.server.repository.UserRepository;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.*;
 import com.recoverpro.server.service.IdempotencyKeyService.IdempotencyResult;
@@ -53,12 +54,9 @@ public class PtpController {
             "status", "status");
 
     private static final String SUBMITTERS = "hasAnyRole('FO','CALLER')";
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER','ORG_ADMIN')";
-    private static final String LEADS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','ORG_ADMIN')";
-    private static final String ADMINS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')";
+    private static final String READERS = Authz.ALL_STAFF;
+    private static final String LEADS = Authz.LEADS;
+    private static final String ADMINS = Authz.ADMINS;
     private static final String IDEMPOTENCY_HEADER = "Idempotency-Key";
 
     // Row count above which a CSV export is flagged to platform admins as a mass data export.
@@ -321,6 +319,12 @@ public class PtpController {
                         if (!org.equals(a.getOrganizationId())) return false;
                         return !foOnly || user.equals(p.getAgentId());
                     } catch (Exception e) {
+                        // SYSTEM 13 TASK 13.2: was silently excluded, indistinguishable from a
+                        // legitimate cross-org filter -- a transient allocation-lookup failure
+                        // (or a genuinely orphaned PTP) would make a real PTP vanish from the list
+                        // with no trace anywhere that something went wrong, not just "filtered."
+                        log.warn("PTP scoping: allocation lookup failed for ptpId={} allocationId={}, "
+                                + "excluding from result: {}", p.getId(), p.getAllocationId(), e.getMessage());
                         return false;
                     }
                 }).toList();

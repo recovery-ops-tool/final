@@ -3,6 +3,7 @@ package com.recoverpro.server.controller;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.dto.response.CollectionDocumentResponse;
 import com.recoverpro.server.entity.CollectionDocument;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.DocumentService;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,9 @@ public class DocumentController {
 
     private final DocumentService documentService;
 
+    private static final String READERS = Authz.FO_AND_ADMINS;
+    private static final String ADMINS = Authz.ADMINS;
+
     @PostMapping("/{collectionId}/documents")
     @PreAuthorize("hasAnyRole('FO', 'ORG_ADMIN')")
     public ResponseEntity<ApiResponse<CollectionDocumentResponse>> upload(
@@ -42,7 +46,7 @@ public class DocumentController {
     }
 
     @GetMapping("/{collectionId}/documents")
-    @PreAuthorize("hasAnyRole('FO', 'ORG_ADMIN', 'ORG_ADMIN', 'PLATFORM_ADMIN')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<List<CollectionDocumentResponse>>> listDocuments(
             @PathVariable UUID collectionId) {
         List<CollectionDocumentResponse> docs = documentService.getDocumentsByCollection(collectionId);
@@ -50,7 +54,7 @@ public class DocumentController {
     }
 
     @GetMapping("/{collectionId}/documents/{documentId}/download")
-    @PreAuthorize("hasAnyRole('FO', 'ORG_ADMIN', 'ORG_ADMIN', 'PLATFORM_ADMIN')")
+    @PreAuthorize(READERS)
     public ResponseEntity<Resource> download(
             @PathVariable UUID collectionId,
             @PathVariable UUID documentId,
@@ -73,7 +77,7 @@ public class DocumentController {
     }
 
     @DeleteMapping("/{collectionId}/documents/{documentId}")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN', 'PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID collectionId,
             @PathVariable UUID documentId,

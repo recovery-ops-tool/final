@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
-import * as Sentry from '@sentry/react-native';
+// import * as Sentry from '@sentry/react-native';
 import {
   useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold,
 } from '@expo-google-fonts/inter';
@@ -19,11 +19,11 @@ SplashScreen.preventAutoHideAsync();
 // No-ops until EXPO_PUBLIC_SENTRY_DSN is supplied (dev/CI builds have none)
 // -- see eas.json for where a real staging/production DSN should go.
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
-Sentry.init({
-  dsn: sentryDsn,
-  enabled: !!sentryDsn,
-  tracesSampleRate: 1.0,
-});
+// Sentry.init({
+//   dsn: sentryDsn,
+//   enabled: !!sentryDsn,
+//   tracesSampleRate: 1.0,
+// });
 
 function RootNavigator() {
   const { user, isLoading } = useAuth();
@@ -93,5 +93,5 @@ function RootLayout() {
   );
 }
 
-export default Sentry.wrap(RootLayout);
+export default RootLayout;
 

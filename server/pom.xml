@@ -37,6 +37,9 @@
              environment to confirm); verify against Maven Central before deploying. -->
         <razorpay.version>1.4.4</razorpay.version>
         <awssdk.version>2.29.26</awssdk.version>
+        <!-- 8.x targets Logback 1.5.x/SLF4J 2.x, matching this Boot line's bundled
+             logback-classic 1.5.22. Verify against Maven Central before deploying. -->
+        <logstash-logback-encoder.version>8.0</logstash-logback-encoder.version>
     </properties>
 
     <dependencies>
@@ -142,6 +145,16 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
+        <!-- SYSTEM 13 TASK 13.1: Jakarta variant (this app is Spring Boot 3 / jakarta.*, not the
+             plain sentry-spring-boot-starter, which targets Spring Boot 2 / javax.*). Auto-config
+             is inert with no sentry.dsn set (SentryAutoConfiguration's own default), so this is
+             safe to add unconditionally: local/dev/test are unaffected until a real DSN exists. -->
+        <dependency>
+            <groupId>io.sentry</groupId>
+            <artifactId>sentry-spring-boot-starter-jakarta</artifactId>
+            <version>8.53.0</version>
+        </dependency>
+
         <!-- Scheduling lock -->
         <dependency>
             <groupId>net.javacrumbs.shedlock</groupId>
@@ -161,7 +174,7 @@
             <version>${springdoc.version}</version>
         </dependency>
 
-        <!-- AWS S3 + KMS -->
+        <!-- AWS S3 + KMS + Secrets Manager -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
@@ -170,6 +183,11 @@
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>kms</artifactId>
+            <version>${awssdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>secretsmanager</artifactId>
             <version>${awssdk.version}</version>
         </dependency>
 
@@ -272,6 +290,18 @@
             <version>4.0.0</version>
         </dependency>
 
+        <!-- Logging -->
+        <!-- SYSTEM 04 TASK 4.2 verification found the prod profile could not boot at all:
+             logback-spring.xml's "prod" springProfile block references
+             net.logstash.logback.encoder.LogstashEncoder for structured JSON console logging,
+             but no dependency provided that class. A boot attempt under any prod-like profile
+             failed at logging initialization before even reaching application code. -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>${logstash-logback-encoder.version}</version>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -286,6 +316,43 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+                <executions>
+                    <!-- SYSTEM 06 TASK 6.4.c: generates META-INF/build-info.properties (build
+                         time/version/artifact). Boot's own InfoEndpoint auto-exposes it under
+                         /actuator/info once that endpoint is in
+                         management.endpoints.web.exposure.include. Paired with git-commit-id-
+                         maven-plugin below for the actual git SHA. -->
+                    <execution>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- SYSTEM 06 TASK 6.4.c: generates git.properties at build time (commit SHA,
+                     branch, build time). Boot's InfoEndpoint auto-detects it on the classpath
+                     the same way it does build-info.properties above, no extra wiring needed
+                     beyond exposing the "info" actuator endpoint. Lets a running instance be
+                     traced back to the exact commit it was built from. -->
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+                <version>9.0.1</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>revision</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <generateGitPropertiesFile>true</generateGitPropertiesFile>
+                    <generateGitPropertiesFilename>${project.build.outputDirectory}/git.properties</generateGitPropertiesFilename>
+                    <!-- Don't fail a build that happens to run outside a git checkout (e.g. a
+                         source-only distribution); production builds always run from a real
+                         clone, so this only matters as a safety net. -->
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
                 </configuration>
             </plugin>
             <plugin>
@@ -306,6 +373,30 @@
                             <version>${mapstruct.version}</version>
                         </path>
                     </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- SYSTEM 03 TASK 3.1: lets CI (and anyone locally) run `mvn flyway:migrate` /
+                 `flyway:validate` as standalone Maven goals against a scratch database, without
+                 booting the full Spring app. Pinned to the exact version flyway-core resolves to
+                 (10.20.1, confirmed via `mvn dependency:tree`) so migration behavior in this
+                 validation step can't drift from what the app actually runs at boot.
+                 Reads connection info from OS env vars (DB_URL/DB_USER/DB_PASSWORD), the same names
+                 application.properties uses. CI sets these directly as job env vars; locally,
+                 `set -a && source .env && set +a` before running (spring-dotenv, the app's own
+                 .env loader, only applies inside a booted Spring context, not to this plugin). -->
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <version>10.20.1</version>
+                <configuration>
+                    <url>${env.DB_URL}</url>
+                    <user>${env.DB_USER}</user>
+                    <password>${env.DB_PASSWORD}</password>
+                    <locations>
+                        <!-- filesystem:, not classpath:. Avoids needing `mvn compile` to run
+                             first just so migrations are copied to target/classes. -->
+                        <location>filesystem:src/main/resources/db/migration</location>
+                    </locations>
                 </configuration>
             </plugin>
         </plugins>

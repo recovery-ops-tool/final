@@ -67,6 +67,42 @@ public interface FileUploadRepository extends JpaRepository<FileUpload, UUID> {
     @Query("SELECT COUNT(f) FROM FileUpload f WHERE f.isDeleted = false AND f.createdAt >= :since")
     long countSince(@Param("since") Instant since);
 
+    /** TASK 20.4: live count for the monthly file-upload entitlement cap -- not a maintained
+     *  counter, same reasoning as {@code EntitlementServiceImpl}'s class javadoc. */
+    @Query("SELECT COUNT(f) FROM FileUpload f WHERE f.organization.id = :organizationId " +
+            "AND f.isDeleted = false AND f.createdAt >= :since")
+    long countByOrganizationIdAndCreatedAtAfterAndIsDeletedFalse(
+            @Param("organizationId") UUID organizationId, @Param("since") Instant since);
+
+    /** TASK 20.4: live sum for the storage entitlement cap. Excludes soft-deleted rows because
+     *  {@code FileUploadServiceImpl.softDeleteFileUpload} actually deletes the underlying object
+     *  via {@code FileStorageService.delete()} -- the bytes are genuinely reclaimed, not just
+     *  hidden. */
+    @Query("SELECT COALESCE(SUM(f.fileSizeBytes), 0) FROM FileUpload f " +
+            "WHERE f.organization.id = :organizationId AND f.isDeleted = false")
+    long sumFileSizeBytesByOrganizationIdAndIsDeletedFalse(@Param("organizationId") UUID organizationId);
+
+    /** TASK 28.3: activation-checklist "import your first allocation file" step, and the
+     *  createdAt off this row is TASK 28.3.d's time-to-first-import metric input. Only a
+     *  genuinely-processed outcome counts (COMPLETED/PARTIALLY_COMPLETED) -- a still-PENDING or
+     *  FAILED upload isn't "your first import" yet. */
+    @Query("SELECT f FROM FileUpload f WHERE f.organization.id = :organizationId " +
+            "AND f.uploadType = :uploadType AND f.status IN :statuses AND f.isDeleted = false " +
+            "ORDER BY f.createdAt ASC")
+    List<FileUpload> findCompletedByOrganizationIdAndUploadTypeOrderedByCreatedAt(
+            @Param("organizationId") UUID organizationId,
+            @Param("uploadType") UploadType uploadType,
+            @Param("statuses") List<FileUploadStatus> statuses,
+            Pageable pageable);
+
+    default Optional<FileUpload> findFirstCompletedByOrganizationIdAndUploadType(
+            UUID organizationId, UploadType uploadType, List<FileUploadStatus> statuses) {
+        return findCompletedByOrganizationIdAndUploadTypeOrderedByCreatedAt(
+                organizationId, uploadType, statuses,
+                org.springframework.data.domain.PageRequest.of(0, 1))
+                .stream().findFirst();
+    }
+
     @Modifying
     @Transactional
     @Query("UPDATE FileUpload f SET f.processedRows = :processedRows, f.successfulRows = :successfulRows, " +

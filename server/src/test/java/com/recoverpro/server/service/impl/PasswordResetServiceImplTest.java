@@ -121,4 +121,27 @@ class PasswordResetServiceImplTest {
 
         verify(rateLimiter).reset("resetpw:agent@example.com");
     }
+
+    /** SYSTEM 08 TASK 8.4.b: was only ever written to the legacy free-text log, never to
+     *  unified_audit_events -- inconsistent with resetPassword()'s own wrong-OTP branch just
+     *  below it in the source, which already records both. */
+    @Test
+    void verifyResetOtp_invalidOtp_recordsStructuredAuditFailure() {
+        when(userRepository.findByEmail("agent@example.com")).thenReturn(Optional.of(user));
+        PasswordResetToken token = PasswordResetToken.builder()
+                .id(UUID.randomUUID()).user(user).otpHash("otp-hash").used(false)
+                .expiresAt(Instant.now().plusSeconds(600)).build();
+        when(passwordResetTokenRepository.findValidByUserId(any(), any())).thenReturn(Optional.of(token));
+        when(passwordEncoder.matches("000000", "otp-hash")).thenReturn(false);
+
+        VerifyOtpRequest request = new VerifyOtpRequest();
+        request.setEmail("agent@example.com");
+        request.setOtp("000000");
+
+        assertThatThrownBy(() -> service.verifyResetOtp(request)).isInstanceOf(InvalidOtpException.class);
+
+        verify(auditService).record(org.mockito.ArgumentMatchers.argThat(evt ->
+                evt.getAction() == com.recoverpro.server.enums.AuditAction.AUTH_PASSWORD_RESET_COMPLETED
+                        && evt.getResult() == com.recoverpro.server.enums.AuditResult.FAILURE));
+    }
 }

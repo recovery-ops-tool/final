@@ -12,6 +12,7 @@ import com.recoverpro.server.repository.OrgSubscriptionRepository;
 import com.recoverpro.server.repository.PasswordResetTokenRepository;
 import com.recoverpro.server.repository.RoleRepository;
 import com.recoverpro.server.repository.UserRepository;
+import com.recoverpro.server.security.CustomUserDetailsService;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.AuditService;
 import com.recoverpro.server.service.EmailService;
@@ -30,9 +31,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -60,6 +65,7 @@ class PlatformOrganizationControllerTest {
     @Mock private NotificationService notificationService;
     @Mock private OrgSubscriptionRepository orgSubscriptionRepo;
     @Mock private FeatureFlagService featureFlagService;
+    @Mock private CustomUserDetailsService customUserDetailsService;
 
     private AppProperties appProperties;
     private PlatformOrganizationController controller;
@@ -70,23 +76,27 @@ class PlatformOrganizationControllerTest {
         controller = new PlatformOrganizationController(
                 orgRepo, userRepo, roleRepo, passwordEncoder, auditLogService, auditService,
                 emailService, passwordResetTokenRepo, appProperties, userMapper, notificationService,
-                orgSubscriptionRepo, featureFlagService);
+                orgSubscriptionRepo, featureFlagService, customUserDetailsService);
 
-        when(orgRepo.existsByCode(any())).thenReturn(false);
-        when(orgRepo.existsByName(any())).thenReturn(false);
-        when(userRepo.existsByEmail(any())).thenReturn(false);
-        when(roleRepo.findByNameAndOrganizationIdIsNull(PlatformConstants.ROLE_ORG_ADMIN))
+        // lenient(): not every test below exercises the create() flow these were written for
+        // (the delete/restore/setActive tests added for SYSTEM 18 TASK 18.2 don't touch most of
+        // these), and MockitoExtension's default STRICT_STUBS would otherwise fail those tests
+        // for "unnecessary stubbing" rather than for anything they actually got wrong.
+        lenient().when(orgRepo.existsByCode(any())).thenReturn(false);
+        lenient().when(orgRepo.existsByName(any())).thenReturn(false);
+        lenient().when(userRepo.existsByEmail(any())).thenReturn(false);
+        lenient().when(roleRepo.findByNameAndOrganizationIdIsNull(PlatformConstants.ROLE_ORG_ADMIN))
                 .thenReturn(Optional.of(Role.builder().name(PlatformConstants.ROLE_ORG_ADMIN).build()));
-        when(orgRepo.save(any())).thenAnswer(inv -> {
+        lenient().when(orgRepo.save(any())).thenAnswer(inv -> {
             com.recoverpro.server.entity.Organization o = inv.getArgument(0);
-            if (o.getId() == null) o.setId(UUID.randomUUID()); // JPA @GeneratedValue, simulated
+            if (o != null && o.getId() == null) o.setId(UUID.randomUUID()); // JPA @GeneratedValue, simulated
             return o;
         });
-        when(userRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(orgSubscriptionRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
-        when(userRepo.countByOrganizationId(any())).thenReturn(1L);
-        when(userRepo.findByOrganizationIdAndRoleName(any(), any())).thenReturn(java.util.List.of());
+        lenient().when(userRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(orgSubscriptionRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+        lenient().when(userRepo.countByOrganizationId(any())).thenReturn(1L);
+        lenient().when(userRepo.findByOrganizationIdAndRoleName(any(), any())).thenReturn(java.util.List.of());
     }
 
     /**
@@ -191,5 +201,93 @@ class PlatformOrganizationControllerTest {
         String secondOrgPasswordInput = allHashedInputs.getAllValues().get(2);
         assertThat(secondOrgPasswordInput).isNotBlank().hasSizeGreaterThan(20);
         assertThat(firstOrgPasswordInput).isNotEqualTo(secondOrgPasswordInput);
+    }
+
+    // ─── SYSTEM 18 TASK 18.2.c: soft delete / restore ──────────────────────────
+
+    @Test
+    void delete_noUsersLeft_softDeletesInsteadOfHardDeleting() {
+        UUID orgId = UUID.randomUUID();
+        com.recoverpro.server.entity.Organization org = com.recoverpro.server.entity.Organization.builder()
+                .id(orgId).name("Empty Org").code("EMPTY").isActive(true).build();
+        when(orgRepo.findById(orgId)).thenReturn(Optional.of(org));
+        when(userRepo.countByOrganizationId(orgId)).thenReturn(0L);
+        when(userRepo.findEmailsByOrganizationId(orgId)).thenReturn(java.util.List.of());
+        UserPrincipal caller = mock(UserPrincipal.class);
+        when(caller.getId()).thenReturn(UUID.randomUUID());
+
+        controller.delete(orgId, "no longer needed", caller);
+
+        assertThat(org.isActive()).isFalse();
+        assertThat(org.getDeletedAt()).isNotNull();
+        assertThat(org.getDeletionReason()).isEqualTo("no longer needed");
+        verify(orgRepo, never()).delete(any());
+        verify(auditService).record(argThat(req ->
+                req.getAction() == com.recoverpro.server.enums.AuditAction.ORG_DELETED));
+    }
+
+    @Test
+    void delete_stillHasUsers_throwsAndDoesNotMutate() {
+        UUID orgId = UUID.randomUUID();
+        com.recoverpro.server.entity.Organization org = com.recoverpro.server.entity.Organization.builder()
+                .id(orgId).name("Busy Org").code("BUSY").isActive(true).build();
+        when(orgRepo.findById(orgId)).thenReturn(Optional.of(org));
+        when(userRepo.countByOrganizationId(orgId)).thenReturn(3L);
+        UserPrincipal caller = mock(UserPrincipal.class);
+
+        assertThatThrownBy(() -> controller.delete(orgId, null, caller))
+                .isInstanceOf(com.recoverpro.server.common.exception.BusinessException.class)
+                .hasMessageContaining("3 user");
+        assertThat(org.getDeletedAt()).isNull();
+        verify(orgRepo, never()).save(any());
+    }
+
+    @Test
+    void restore_deletedNotYetPurged_clearsDeletedAt() {
+        UUID orgId = UUID.randomUUID();
+        com.recoverpro.server.entity.Organization org = com.recoverpro.server.entity.Organization.builder()
+                .id(orgId).name("Restorable Org").code("RESTORE").isActive(false)
+                .deletedAt(java.time.Instant.now()).build();
+        when(orgRepo.findById(orgId)).thenReturn(Optional.of(org));
+        UserPrincipal caller = mock(UserPrincipal.class);
+        when(caller.getId()).thenReturn(UUID.randomUUID());
+
+        controller.restore(orgId, caller);
+
+        assertThat(org.getDeletedAt()).isNull();
+        assertThat(org.isActive())
+                .as("restore reverses deletion but must not silently re-grant access -- use setActive separately")
+                .isFalse();
+    }
+
+    @Test
+    void restore_alreadyPurged_throws() {
+        UUID orgId = UUID.randomUUID();
+        com.recoverpro.server.entity.Organization org = com.recoverpro.server.entity.Organization.builder()
+                .id(orgId).isActive(false).deletedAt(java.time.Instant.now())
+                .purgedAt(java.time.Instant.now()).build();
+        when(orgRepo.findById(orgId)).thenReturn(Optional.of(org));
+        UserPrincipal caller = mock(UserPrincipal.class);
+
+        assertThatThrownBy(() -> controller.restore(orgId, caller))
+                .isInstanceOf(com.recoverpro.server.common.exception.BusinessException.class)
+                .hasMessageContaining("purged");
+    }
+
+    @Test
+    void setActive_suspending_evictsCachedUserDetailsForEveryOrgMember() {
+        UUID orgId = UUID.randomUUID();
+        com.recoverpro.server.entity.Organization org = com.recoverpro.server.entity.Organization.builder()
+                .id(orgId).name("Org").code("ORG").isActive(true).build();
+        when(orgRepo.findById(orgId)).thenReturn(Optional.of(org));
+        when(userRepo.findEmailsByOrganizationId(orgId))
+                .thenReturn(java.util.List.of("a@example.com", "b@example.com"));
+        UserPrincipal caller = mock(UserPrincipal.class);
+        when(caller.getId()).thenReturn(UUID.randomUUID());
+
+        controller.setActive(orgId, false, caller);
+
+        verify(customUserDetailsService).evictUserCache("a@example.com");
+        verify(customUserDetailsService).evictUserCache("b@example.com");
     }
 }

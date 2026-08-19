@@ -1,10 +1,12 @@
 package com.recoverpro.server.controller;
 
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.dto.request.CreateUserRequestDto;
 import com.recoverpro.server.dto.request.ReviewRequestDto;
 import com.recoverpro.server.dto.response.UserCreationRequestResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.UserCreationRequestService;
@@ -29,8 +31,10 @@ public class UserCreationRequestController {
     private final UserCreationRequestService service;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
 
+    private static final String ADMINS = Authz.ADMINS;
+
     @PostMapping
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<UserCreationRequestResponse>> submit(
             @Valid @RequestBody CreateUserRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -39,7 +43,7 @@ public class UserCreationRequestController {
     }
 
     @GetMapping("/pending")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<PagedResponse<UserCreationRequestResponse>>> listPending(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -47,31 +51,31 @@ public class UserCreationRequestController {
 
         elevateIfPlatformAdmin(principal, "userRequests:pending");
         Page<UserCreationRequestResponse> result = service.listPendingForApprover(
-                principal, PageRequest.of(page, size, Sort.by("createdAt").descending()));
+                principal, PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("createdAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 
     @GetMapping("/mine")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<PagedResponse<UserCreationRequestResponse>>> listMine(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         Page<UserCreationRequestResponse> result = service.listMyRequests(
-                principal, PageRequest.of(page, size, Sort.by("createdAt").descending()));
+                principal, PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("createdAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 
     @GetMapping("/pending-count")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<Long>> pendingCount(@AuthenticationPrincipal UserPrincipal principal) {
         elevateIfPlatformAdmin(principal, "userRequests:pendingCount");
         return ResponseEntity.ok(ApiResponse.success(service.countPendingForApprover(principal)));
     }
 
     @PatchMapping("/{id}/review")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<UserCreationRequestResponse>> review(
             @PathVariable UUID id,
             @Valid @RequestBody ReviewRequestDto dto,

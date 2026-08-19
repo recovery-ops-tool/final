@@ -3,6 +3,8 @@ package com.recoverpro.server.controller;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.common.exception.PaymentProviderException;
+import com.recoverpro.server.dto.request.ChangePlanRequest;
+import com.recoverpro.server.dto.request.CheckoutRequest;
 import com.recoverpro.server.dto.response.SubscriptionResponse;
 import com.recoverpro.server.entity.OrgSubscription;
 import com.recoverpro.server.entity.OrgSubscription.Plan;
@@ -10,11 +12,13 @@ import com.recoverpro.server.entity.OrgSubscription.Status;
 import com.recoverpro.server.enums.AuditAction;
 import com.recoverpro.server.enums.AuditResourceType;
 import com.recoverpro.server.repository.OrgSubscriptionRepository;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.AuditEventRequest;
 import com.recoverpro.server.service.AuditService;
 import com.recoverpro.server.service.FeatureFlagService;
 import com.recoverpro.server.service.PaymentProviderResolver;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -38,8 +42,11 @@ public class SubscriptionController {
     private final FeatureFlagService featureFlagService;
     private final AuditService auditService;
 
+    private static final String ADMINS = Authz.ADMINS;
+    private static final String ALL_STAFF = Authz.ALL_STAFF;
+
     @GetMapping
-    @PreAuthorize("hasAnyRole('ORG_ADMIN', 'PLATFORM_ADMIN', 'MANAGER', 'TL', 'FO', 'CALLER', 'TRACER')")
+    @PreAuthorize(ALL_STAFF)
     public ResponseEntity<ApiResponse<SubscriptionResponse>> get(
             @AuthenticationPrincipal UserPrincipal caller) {
 
@@ -74,7 +81,7 @@ public class SubscriptionController {
     }
 
     @PostMapping("/free")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN', 'PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<String>> selectFree(
             @AuthenticationPrincipal UserPrincipal caller) {
 
@@ -93,12 +100,12 @@ public class SubscriptionController {
     }
 
     @PostMapping("/checkout")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN', 'PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<Map<String, String>>> checkout(
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody CheckoutRequest body,
             @AuthenticationPrincipal UserPrincipal caller) {
 
-        String plan = body.getOrDefault("plan", "STARTER");
+        String plan = body.getPlan();
         UUID orgId = requireOrgContext(caller);
         try {
             String url = paymentProviderResolver.resolveForOrg(orgId).createCheckoutUrl(orgId, plan);
@@ -121,21 +128,17 @@ public class SubscriptionController {
      * differences are documented on {@link com.recoverpro.server.service.PaymentProvider#changePlan}.
      */
     @PutMapping("/plan")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN', 'PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<String>> changePlan(
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody ChangePlanRequest body,
             @AuthenticationPrincipal UserPrincipal caller) {
 
         UUID orgId = requireOrgContext(caller);
-        String planName = body.get("plan");
-        if (planName == null || planName.isBlank()) {
-            throw new BusinessException("plan is required");
-        }
         Plan newPlan;
         try {
-            newPlan = Plan.valueOf(planName.toUpperCase());
+            newPlan = Plan.valueOf(body.getPlan().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new BusinessException("Unknown plan: " + planName);
+            throw new BusinessException("Unknown plan: " + body.getPlan());
         }
 
         OrgSubscription sub = subRepo.findByOrgId(orgId)
@@ -148,7 +151,7 @@ public class SubscriptionController {
         boolean upgrade = newPlan.ordinal() > previousPlan.ordinal();
 
         try {
-            paymentProviderResolver.resolveForOrg(orgId).changePlan(orgId, planName, upgrade);
+            paymentProviderResolver.resolveForOrg(orgId).changePlan(orgId, body.getPlan(), upgrade);
         } catch (PaymentProviderException e) {
             log.error("Plan-change error for org {}: {}", orgId, e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.of(e.getMessage(), null));
@@ -173,7 +176,7 @@ public class SubscriptionController {
     }
 
     @PostMapping("/portal")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN', 'PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<Map<String, String>>> portal(
             @AuthenticationPrincipal UserPrincipal caller) {
 

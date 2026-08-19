@@ -103,7 +103,7 @@ public class SubmitVisitInterviewTool implements LucienTool {
      */
     @Override
     public String execute(JsonNode args, UserPrincipal principal) {
-        orgIsolationGuard.belongsToOrg(principal.getOrganizationId());
+        orgIsolationGuard.assertBelongsToOrg(principal.getOrganizationId());
 
         UUID allocationId = requireUuid(args, "allocationId");
         Disp disp = requireEnum(args, "disp", Disp.class);

@@ -98,16 +98,40 @@ public class StripeWebhookService {
     }
 
     /** {@code customer.subscription.created} and {@code .updated} carry the same
-     * authoritative snapshot, so both are synced identically. */
+     * authoritative snapshot, so both are synced identically. No ordering check -- callers that
+     * know their own event's timestamp should prefer the overload below; this one exists for
+     * callers (backfills, tests) with no event envelope to compare against. */
     @Transactional
     public void handleSubscriptionUpserted(Subscription subscription) {
+        handleSubscriptionUpserted(subscription, null);
+    }
+
+    /**
+     * SYSTEM 19 TASK 19.3.c: {@code eventCreatedAt} is the webhook Event's own {@code created}
+     * timestamp (Stripe's delivery order is not guaranteed -- retries and network jitter can
+     * reorder deliveries). If it is OLDER than the last event already applied to this org, this
+     * is a stale/out-of-order delivery: skip the write entirely rather than regressing state that
+     * a newer delivery already advanced past. {@code null} (the single-arg overload) always
+     * applies, matching the pre-TASK-19.3 behavior for callers with no event timestamp to offer.
+     */
+    @Transactional
+    public void handleSubscriptionUpserted(Subscription subscription, Instant eventCreatedAt) {
         OrgSubscription sub = requireByCustomerId(subscription.getCustomer());
+        if (isStale(sub, eventCreatedAt)) {
+            log.warn("Stripe subscription.updated for org {} is older than the last applied event "
+                    + "({} < {}) -- skipping to avoid regressing state", sub.getOrgId(),
+                    eventCreatedAt, sub.getLastWebhookEventAt());
+            return;
+        }
         sub.setStripeSubscriptionId(subscription.getId());
         sub.setStatus(mapStatus(subscription.getStatus()));
         sub.setPlan(resolvePlan(subscription));
         sub.setPlanAmount(resolvePlanAmount(subscription));
         sub.setCurrentPeriodEnd(toInstant(subscription.getCurrentPeriodEnd()));
         sub.setCancelAtPeriodEnd(Boolean.TRUE.equals(subscription.getCancelAtPeriodEnd()));
+        if (eventCreatedAt != null) {
+            sub.setLastWebhookEventAt(eventCreatedAt);
+        }
         subscriptionRepository.save(sub);
         featureFlagService.provisionFlagsFor(sub);
         log.info("Stripe subscription synced: org={}, status={}, plan={}",
@@ -118,27 +142,60 @@ public class StripeWebhookService {
 
     @Transactional
     public void handleSubscriptionDeleted(Subscription subscription) {
+        handleSubscriptionDeleted(subscription, null);
+    }
+
+    /** See {@link #handleSubscriptionUpserted(Subscription, Instant)}'s javadoc for the ordering
+     *  reasoning -- same guard, applied here too since this also overwrites subscription state. */
+    @Transactional
+    public void handleSubscriptionDeleted(Subscription subscription, Instant eventCreatedAt) {
         OrgSubscription sub = requireByCustomerId(subscription.getCustomer());
+        if (isStale(sub, eventCreatedAt)) {
+            log.warn("Stripe subscription.deleted for org {} is older than the last applied event, skipping",
+                    sub.getOrgId());
+            return;
+        }
         sub.setStatus(OrgSubscription.Status.CANCELLED);
+        if (eventCreatedAt != null) {
+            sub.setLastWebhookEventAt(eventCreatedAt);
+        }
         subscriptionRepository.save(sub);
         featureFlagService.provisionFlagsFor(sub);
         log.info("Stripe subscription cancelled: org={}", sub.getOrgId());
         auditSubscriptionEvent(AuditAction.SUBSCRIPTION_CANCELLED, sub.getOrgId(), Map.of());
     }
 
+    private static boolean isStale(OrgSubscription sub, Instant eventCreatedAt) {
+        return eventCreatedAt != null && sub.getLastWebhookEventAt() != null
+                && eventCreatedAt.isBefore(sub.getLastWebhookEventAt());
+    }
+
     @Transactional
     public void handleInvoicePaid(Invoice invoice) {
         upsertInvoice(invoice);
         subscriptionRepository.findByStripeCustomerId(invoice.getCustomer()).ifPresent(sub -> {
-            if (sub.getStatus() == OrgSubscription.Status.PAST_DUE) {
+            // SYSTEM 19 TASK 19.2.c: recover from CANCELLED as well as PAST_DUE. DunningScheduler's
+            // grace-period expiry (expireSubscription()) only ever flips the LOCAL status -- it
+            // never calls Stripe's own cancel API -- so a subscription this app has marked
+            // CANCELLED can still be actively billed by Stripe. If Stripe fires invoice.paid at
+            // all, Stripe itself has NOT terminated the subscription (a truly Stripe-cancelled
+            // subscription never generates another invoice), so this is unambiguous proof of a
+            // real, current payment and access must be restored immediately, not at the next
+            // billing cycle.
+            boolean recoverable = sub.getStatus() == OrgSubscription.Status.PAST_DUE
+                    || sub.getStatus() == OrgSubscription.Status.CANCELLED;
+            if (recoverable) {
+                OrgSubscription.Status previous = sub.getStatus();
                 sub.setStatus(OrgSubscription.Status.ACTIVE);
                 sub.setPastDueSince(null);
                 subscriptionRepository.save(sub);
                 featureFlagService.provisionFlagsFor(sub);
-                log.info("Stripe subscription recovered from PAST_DUE: org={}", sub.getOrgId());
+                log.info("Stripe subscription recovered from {}: org={}", previous, sub.getOrgId());
                 notificationService.createForOrgRole(sub.getOrgId(), PlatformConstants.ROLE_ORG_ADMIN,
                         NotificationType.ORG_PAYMENT_RECOVERED,
                         "Payment received", "Your subscription is active again -- thanks for settling up.");
+                auditSubscriptionEvent(AuditAction.SUBSCRIPTION_CHANGED, sub.getOrgId(),
+                        Map.of("status", "ACTIVE", "previousStatus", previous.name(), "reason", "payment recovered"));
             }
         });
     }
@@ -200,13 +257,14 @@ public class StripeWebhookService {
             return;
         }
 
-        PlatformInvoice row = invoiceRepository.findByStripeInvoiceId(invoice.getId())
+        PlatformInvoice row = invoiceRepository.findByProviderInvoiceId(invoice.getId())
                 .orElseGet(() -> PlatformInvoice.builder()
-                        .stripeInvoiceId(invoice.getId())
+                        .provider(PaymentProviderType.STRIPE)
+                        .providerInvoiceId(invoice.getId())
                         .build());
 
         row.setOrgId(sub.getOrgId());
-        row.setStripeCustomerId(invoice.getCustomer());
+        row.setProviderCustomerId(invoice.getCustomer());
         row.setNumber(invoice.getNumber());
         row.setStatus(invoice.getStatus());
         row.setAmountDue(invoice.getAmountDue() == null ? 0L : invoice.getAmountDue());
@@ -321,7 +379,10 @@ public class StripeWebhookService {
         return unitAmount == null ? null : BigDecimal.valueOf(unitAmount, 2);
     }
 
-    private static OrgSubscription.Status mapStatus(String stripeStatus) {
+    /** Exposed for {@code BillingReconciliationJob} (SYSTEM 19 TASK 19.4), which needs to map a
+     *  freshly-fetched Stripe status the SAME way a real webhook sync would, so a divergence
+     *  alert compares apples to apples rather than reimplementing this mapping a second time. */
+    public static OrgSubscription.Status mapStatus(String stripeStatus) {
         return switch (stripeStatus) {
             case "trialing" -> OrgSubscription.Status.TRIAL;
             case "active" -> OrgSubscription.Status.ACTIVE;

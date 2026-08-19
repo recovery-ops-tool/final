@@ -5,6 +5,7 @@ import './styles/index.css'
 import App from './App'
 import { installNotificationDispatch } from './utils/notificationDispatch'
 import { notifications } from './utils/notifications'
+import { stripPii } from './utils/piiRedaction'
 
 // No-ops until VITE_SENTRY_DSN is supplied at build time (dev/CI builds have
 // none) -- see .env.example for where a real staging/production DSN goes.
@@ -13,6 +14,30 @@ Sentry.init({
   dsn: sentryDsn,
   enabled: !!sentryDsn,
   tracesSampleRate: 1.0,
+  // SYSTEM 13 TASK 13.3.a: "same scrubbing discipline" as the backend
+  // (server/.../config/SentryConfig.java) -- sendDefaultPii stays at its SDK default (false), so
+  // no IP/cookie is attached automatically, and this covers what that default doesn't reach:
+  // request bodies/headers/query strings the SDK's HTTP integrations may have captured, plus
+  // free-text exception/event messages, which can't be blocked by a boolean flag since legitimate
+  // messages live in the same field. Reuses the same PII pattern list as the backend's
+  // DataSanitizer (utils/piiRedaction.ts), not a separate, unreviewed regex.
+  beforeSend(event) {
+    if (event.request) {
+      event.request.data = undefined;
+      event.request.headers = undefined;
+      event.request.cookies = undefined;
+      event.request.query_string = undefined;
+    }
+    if (event.message) {
+      event.message = stripPii(event.message) ?? event.message;
+    }
+    event.exception?.values?.forEach((exception) => {
+      if (exception.value) {
+        exception.value = stripPii(exception.value) ?? exception.value;
+      }
+    });
+    return event;
+  },
 });
 
 /* Theme bootstrap — runs before React mounts so the login screen, the

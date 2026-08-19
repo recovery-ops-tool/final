@@ -90,6 +90,20 @@ public class RazorpayPaymentProvider implements PaymentProvider {
             JSONObject request = new JSONObject();
             request.put("cancel_at_cycle_end", atPeriodEnd ? 1 : 0);
             client.subscriptions.cancel(sub.getRazorpaySubscriptionId(), request);
+            // SYSTEM 19 TASK 19.1: org_subscriptions.cancel_at_period_end was never set anywhere
+            // on the Razorpay path -- Stripe's equivalent flag is synced FROM a webhook
+            // (customer.subscription.updated carries cancel_at_period_end back from Stripe's own
+            // state), but Razorpay's subscription entity does not reliably expose an equivalent
+            // field on ordinary webhook deliveries (verify against a live payload capture, same
+            // caveat as the rest of this class). Set here instead, from this call's own parameter,
+            // as a deliberate narrow exception to "webhooks are the source of truth" -- this is
+            // this app's own authenticated, synchronous API response from Razorpay confirming the
+            // request was accepted, not an unauthenticated client callback being trusted in its
+            // place. Status itself is NOT set here -- subscription.cancelled is a reliable
+            // Razorpay webhook (already handled by handleCancelled), so that half stays
+            // webhook-driven, same as Stripe.
+            sub.setCancelAtPeriodEnd(atPeriodEnd);
+            subRepo.save(sub);
             log.info("Razorpay subscription cancel requested: org={}, atPeriodEnd={}", orgId, atPeriodEnd);
         } catch (RazorpayException e) {
             throw new PaymentProviderException("Razorpay cancellation error: " + e.getMessage(), e);
@@ -129,6 +143,21 @@ public class RazorpayPaymentProvider implements PaymentProvider {
             log.info("Razorpay subscription plan changed: org={}, newPlan={}, upgrade={}", orgId, newPlanName, upgrade);
         } catch (RazorpayException e) {
             throw new PaymentProviderException("Razorpay plan-change error: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public java.util.Optional<String> fetchRemoteStatus(UUID orgId) {
+        OrgSubscription sub = subRepo.findByOrgId(orgId).orElse(null);
+        if (sub == null || sub.getRazorpaySubscriptionId() == null) {
+            return java.util.Optional.empty();
+        }
+        RazorpayClient client = requireClient();
+        try {
+            com.razorpay.Subscription subscription = client.subscriptions.fetch(sub.getRazorpaySubscriptionId());
+            return java.util.Optional.ofNullable(subscription.get("status"));
+        } catch (RazorpayException e) {
+            throw new PaymentProviderException("Razorpay status-fetch error: " + e.getMessage(), e);
         }
     }
 

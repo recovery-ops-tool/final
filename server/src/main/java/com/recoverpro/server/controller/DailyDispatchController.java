@@ -3,7 +3,9 @@ package com.recoverpro.server.controller;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.dto.request.CreateDailyDispatchRequest;
+import com.recoverpro.server.dto.request.RemoveDispatchCaseRequest;
 import com.recoverpro.server.dto.response.AllocationResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.DailyDispatchService;
 import jakarta.validation.Valid;
@@ -34,8 +36,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DailyDispatchController {
 
-    private static final String LEADS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','ORG_ADMIN')";
+    private static final String LEADS = Authz.LEADS;
 
     private final DailyDispatchService dailyDispatchService;
 
@@ -61,7 +62,10 @@ public class DailyDispatchController {
      * GET /api/v1/daily-dispatch/me?date=YYYY-MM-DD -- FO fetches their own list.
      * Defaults to today if `date` is omitted.
      */
+    // SYSTEM 09 TASK 9.2: makes the pre-existing filter-chain authentication requirement
+    // explicit -- self-service, principal.getId() throughout.
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<AllocationResponse>>> myList(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -95,14 +99,10 @@ public class DailyDispatchController {
     @PreAuthorize(LEADS)
     public ResponseEntity<ApiResponse<Void>> removeCase(
             @AuthenticationPrincipal UserPrincipal principal,
-            @RequestBody Map<String, Object> payload) {
+            @Valid @RequestBody RemoveDispatchCaseRequest payload) {
 
         UUID orgId = requireOrgId(principal);
-        UUID agentId = UUID.fromString(payload.get("agentId").toString());
-        LocalDate date = LocalDate.parse(payload.get("date").toString());
-        UUID allocationId = UUID.fromString(payload.get("allocationId").toString());
-
-        dailyDispatchService.removeCase(orgId, agentId, date, allocationId);
+        dailyDispatchService.removeCase(orgId, payload.getAgentId(), payload.getDate(), payload.getAllocationId());
         return ResponseEntity.ok(ApiResponse.of("Dispatch entry removed", null));
     }
 

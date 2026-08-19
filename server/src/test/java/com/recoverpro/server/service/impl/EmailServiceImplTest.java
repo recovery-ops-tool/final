@@ -1,5 +1,6 @@
 package com.recoverpro.server.service.impl;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,10 +21,12 @@ class EmailServiceImplTest {
     @Mock private JavaMailSender mailSender;
 
     private EmailServiceImpl service;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
-        service = new EmailServiceImpl(mailSender);
+        meterRegistry = new SimpleMeterRegistry();
+        service = new EmailServiceImpl(mailSender, meterRegistry);
         ReflectionTestUtils.setField(service, "fromAddress", "noreply@example.com");
         ReflectionTestUtils.setField(service, "contactRecipient", "sales@example.com");
     }
@@ -37,6 +40,10 @@ class EmailServiceImplTest {
         SimpleMailMessage sent = captor.getValue();
         assertThat(sent.getTo()).containsExactly("user@example.com");
         assertThat(sent.getText()).contains("123456");
+
+        // SYSTEM 12 TASK 12.2: email_send_events_total appears in the registry after a real send.
+        assertThat(meterRegistry.get("email_send_events_total").tag("outcome", "sent")
+                .counter().count()).isEqualTo(1.0);
     }
 
     @Test

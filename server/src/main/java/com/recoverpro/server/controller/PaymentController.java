@@ -5,6 +5,7 @@ import com.recoverpro.server.dto.request.CreatePaymentIntentRequest;
 import com.recoverpro.server.dto.request.CreatePaymentLinkRequest;
 import com.recoverpro.server.dto.response.PaymentIntentResponse;
 import com.recoverpro.server.dto.response.PaymentLinkResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.PaymentLinkService;
@@ -34,8 +35,10 @@ public class PaymentController {
     private final PaymentLinkService paymentLinkService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
 
+    private static final String READERS = Authz.FO_AND_ADMINS;
+
     @PostMapping("/api/v1/payments/intents")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<PaymentIntentResponse>> createIntent(
             @Valid @RequestBody CreatePaymentIntentRequest request,
             @RequestHeader(value = "Idempotency-Key") String idempotencyKey,
@@ -49,7 +52,7 @@ public class PaymentController {
     }
 
     @GetMapping("/api/v1/payments/intents/{id}")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<PaymentIntentResponse>> getIntent(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -71,7 +74,7 @@ public class PaymentController {
     }
 
     @PostMapping("/api/v1/payments/links")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO')")
+    @PreAuthorize(READERS)
     public ResponseEntity<ApiResponse<PaymentLinkResponse>> createLink(
             @Valid @RequestBody CreatePaymentLinkRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {

@@ -25,6 +25,7 @@ import com.recoverpro.server.service.importer.ImportContext;
 import com.recoverpro.server.service.importer.ImportFieldSpec;
 import com.recoverpro.server.service.importer.ImportValues;
 import com.recoverpro.server.service.importer.RowValidationException;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +64,7 @@ public class FileProcessingServiceImpl implements FileProcessingService {
     private final AuditService auditService;
     private final EntitlementService entitlementService;
     private final List<EntityImportProcessor<?>> importProcessors;
+    private final MeterRegistry meterRegistry;
 
     private Map<UploadType, EntityImportProcessor<?>> processorsByType;
 
@@ -102,6 +104,7 @@ public class FileProcessingServiceImpl implements FileProcessingService {
             fileUpload.setStatus(FileUploadStatus.PROCESSING);
             fileUploadRepository.save(fileUpload);
             auditFileProcessing(fileUpload, AuditAction.FILE_PROCESSING_STARTED, AuditResult.SUCCESS, null);
+            fileImportCounter(uploadType, "started").increment();
 
             List<ColumnSchema> columnSchemas = columnSchemaRepository
                     .findAllActiveByOrganizationIdAndEntityType(organizationId, uploadType);
@@ -183,7 +186,35 @@ public class FileProcessingServiceImpl implements FileProcessingService {
             fileUpload.setErrorMessage(e.getMessage());
             fileUploadRepository.save(fileUpload);
             auditFileProcessing(fileUpload, AuditAction.FILE_PROCESSING_FAILED, AuditResult.FAILURE, e.getMessage());
+            fileImportCounter(uploadType, "failed").increment();
         }
+    }
+
+    /**
+     * SYSTEM 12 TASK 12.2: file_import_events_total{upload_type, outcome}. Tagged by upload_type
+     * only (a small fixed enum, ALLOCATION/COLLECTION/VISIT/PTP) -- not by organization, which
+     * would blow up cardinality with every new tenant (task's own guidance: prefer a bounded
+     * dimension like plan tier over unbounded ones like org id).
+     */
+    private io.micrometer.core.instrument.Counter fileImportCounter(UploadType uploadType, String outcome) {
+        return io.micrometer.core.instrument.Counter.builder("file_import_events_total")
+                .tag("upload_type", uploadType.name())
+                .tag("outcome", outcome)
+                .register(meterRegistry);
+    }
+
+    /** file_import_rows_processed_total{upload_type, result}, result in {successful, failed}. */
+    private void recordRowsProcessed(UploadType uploadType, int successfulRows, int failedRows) {
+        io.micrometer.core.instrument.Counter.builder("file_import_rows_processed_total")
+                .tag("upload_type", uploadType.name())
+                .tag("result", "successful")
+                .register(meterRegistry)
+                .increment(successfulRows);
+        io.micrometer.core.instrument.Counter.builder("file_import_rows_processed_total")
+                .tag("upload_type", uploadType.name())
+                .tag("result", "failed")
+                .register(meterRegistry)
+                .increment(failedRows);
     }
 
     /** Bounded to counts/status, never row content -- see FILE_PROCESSING_* actions in AuditAction. */
@@ -298,6 +329,7 @@ public class FileProcessingServiceImpl implements FileProcessingService {
         fileUpload.setFailedRows(0);
         fileUploadRepository.save(fileUpload);
         auditFileProcessing(fileUpload, AuditAction.FILE_PROCESSING_COMPLETED, AuditResult.SUCCESS, null);
+        fileImportCounter(fileUpload.getUploadType(), "completed").increment();
     }
 
     /** Flushes any remainder, computes the final status, and audits -- shared tail of both paths. */
@@ -327,6 +359,14 @@ public class FileProcessingServiceImpl implements FileProcessingService {
                 finalStatus == FileUploadStatus.COMPLETED ? null
                         : counters.failedRows + " of " + totalRows + " rows failed validation",
                 totalRows, counters.successfulRows, counters.failedRows);
+
+        String outcome = switch (finalStatus) {
+            case COMPLETED -> "completed";
+            case FAILED -> "failed";
+            default -> "partially_failed";
+        };
+        fileImportCounter(fileUpload.getUploadType(), outcome).increment();
+        recordRowsProcessed(fileUpload.getUploadType(), counters.successfulRows, counters.failedRows);
     }
 
     /**

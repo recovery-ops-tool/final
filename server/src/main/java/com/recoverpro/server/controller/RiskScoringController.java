@@ -2,6 +2,7 @@ package com.recoverpro.server.controller;
 
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.dto.response.BorrowerRiskScoreResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.RiskScoringService;
@@ -33,8 +34,10 @@ public class RiskScoringController {
     private final RiskScoringService riskScoringService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;
 
+    private static final String ADMINS = Authz.ADMINS;
+
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<BorrowerRiskScoreResponse>> getLatest(
             @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
         elevateIfPlatformAdmin(principal, "risk:getLatest:" + id);
@@ -47,7 +50,7 @@ public class RiskScoringController {
     }
 
     @PostMapping("/{id}/score")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<BorrowerRiskScoreResponse>> score(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -58,8 +61,13 @@ public class RiskScoringController {
                         riskScoringService.scoreBorrower(id, callerOrgId(principal))));
     }
 
+    // SYSTEM 07 TASK 7.4: deliberately NOT converted to a typed DTO -- this is a genuinely
+    // open-ended scoring-feature bag whose actual key set varies by caller/model version; a
+    // fixed DTO would over-constrain it. Admin-only (@PreAuthorize below), and
+    // riskScoringService.scoreWithFeatures() is the actual validation boundary for what it does
+    // with arbitrary keys.
     @PostMapping("/{id}/score-with-features")
-    @PreAuthorize("hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')")
+    @PreAuthorize(ADMINS)
     public ResponseEntity<ApiResponse<BorrowerRiskScoreResponse>> scoreWithFeatures(
             @PathVariable UUID id,
             @RequestBody Map<String, Object> features,

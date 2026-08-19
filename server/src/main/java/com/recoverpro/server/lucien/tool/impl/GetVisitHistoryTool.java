@@ -37,7 +37,7 @@ public class GetVisitHistoryTool implements LucienTool {
 
     @Override
     public String execute(JsonNode args, UserPrincipal principal) {
-        orgIsolationGuard.belongsToOrg(principal.getOrganizationId());
+        orgIsolationGuard.assertBelongsToOrg(principal.getOrganizationId());
         try {
             var visits = visitLogService.getTodayVisits(principal.getId());
             return objectMapper.writeValueAsString(visits);

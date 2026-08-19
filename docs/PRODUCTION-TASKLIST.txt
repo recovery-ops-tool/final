@@ -1884,6 +1884,15 @@ TASK 20.4 — Limit enforcement completeness                                 [P1
   ACCEPTANCE: each metered resource returns a specific limit-exceeded error at
   its cap; Lucien AI usage is capped per plan.
 
+  DONE (2026-08-19) for 4 of 5 named resources — file uploads/month, storage,
+  report generations/month, Lucien AI tokens (found already built at 20.4.a's
+  time but as one flat cap for every plan regardless — not actually "capped
+  per plan"; now genuinely plan-derived). "API requests" recorded as
+  not-yet-applicable: no developer/external API surface exists in this
+  codebase to meter (no API-key controller, nothing SYSTEM 24/31/36 would
+  provide) — mirrors TASK 20.2's own CUSTOM_INTEGRATIONS finding. Revisit
+  once such a surface exists. See docs/SYSTEM-20-ENTITLEMENT.md.
+
 WEB FRONTEND: every gated feature needs an "upgrade to unlock" state rather than
 a hidden or broken control. A user who cannot tell why something is disabled
 files a support ticket. Also needs a usage-vs-limit display (see SYSTEM 22).
@@ -2318,6 +2327,17 @@ TASK 26.2 — Specification consistency audit                                [P1
   ACCEPTANCE: an unknown sort parameter returns 400, not a 500 or a leaked
   column name.
 
+  DONE (2026-08-19). Both actual *Specification classes (AuditEvent, Ptp)
+  were already clean on null/empty-filter handling -- the real vulnerability
+  was ~20 unvalidated Sort.by()/raw-Pageable call sites elsewhere, including
+  AllocationServiceImpl.buildSort() (sortBy from the request straight into
+  Sort.by() with zero validation -- Allocations is likely the single
+  highest-traffic list in the app) and AttendanceController/VisitLogController
+  (raw Pageable, Sort bound directly from ?sort= by Spring with no
+  allowlisting). Fixed via SafeSort.from()/sanitize() (existing utility,
+  4 controllers already used it but silently substituted an unrecognized
+  field instead of rejecting -- also fixed). See docs/SYSTEM-26-SEARCH.md.
+
 TASK 26.3 — Pagination correctness                                         [P1]
   Layers: repository
   a. Verify every paginated query has a deterministic total sort order. Without
@@ -2327,6 +2347,15 @@ TASK 26.3 — Pagination correctness                                         [P1
      (allocations). Deep OFFSET on a large table degrades badly.
   ACCEPTANCE: paging through a list while rows are inserted does not duplicate
   or skip rows.
+
+  26.3.a DONE (2026-08-19): SafeSort.withIdTiebreaker() appends id ascending
+  as a final sort key to every paginated query in the codebase that builds a
+  Sort (~20+ call sites, not just the ones 26.2 touched). 26.3.b DEFERRED:
+  docs/DB-HOTSPOTS.md's real pg_stat_statements harvest found no table
+  exceeds ~10k rows yet (allocations itself: 1,906) -- keyset pagination now
+  would be the same speculative-optimization SYSTEM 02 TASK 2.2 already
+  declined for indexes. Revisit once real production data volume exists. See
+  docs/SYSTEM-26-SEARCH.md.
 
 WEB FRONTEND: 26.1f may require changing filter labels and placeholder text.
 Verify the borrower-name filter actually returns results after the fix — this
@@ -2468,6 +2497,14 @@ TASK 28.2 — Trial lifecycle                                                [P1
   ACCEPTANCE: a trial expiring restricts features, notifies the admin, and
   retains all data; extension works and is audited.
 
+  DONE (2026-08-19). New TrialExpiryScheduler (mirrors DunningScheduler's
+  shape) reminds at 3/1 days before trialEndsAt and transitions to CANCELLED
+  + re-provisions flags at expiry -- closes TASK 28.1's own flagged
+  limitation (nothing previously re-provisioned purely because time passed).
+  28.2.d (extend-trial endpoint) found already built in a prior session.
+  28.2.e (web banner) deferred to the frontend phase. See
+  docs/SYSTEM-28-ONBOARDING.md.
+
 TASK 28.3 — Guided activation                                              [P1]
   Layers: entity / service / controller / web
   a. Define the activation checklist for this product — plausibly: invite your
@@ -2479,6 +2516,12 @@ TASK 28.3 — Guided activation                                              [P1
   d. Measure time-to-first-import as the primary activation metric (SYSTEM 33).
   ACCEPTANCE: a fresh org sees the checklist; completing a step updates it.
 
+  DONE, backend (2026-08-19). New GET /api/v1/onboarding/checklist computes
+  every step live against its real backing table (no maintained progress
+  row to drift). timeToFirstImportMinutes (28.3.d) on the same response.
+  28.3.c (web widget) deferred to the frontend phase. See
+  docs/SYSTEM-28-ONBOARDING.md.
+
 TASK 28.4 — Self-serve signup                                              [P2]
   Layers: controller / service / web
   a. Only if the product intends self-serve. If onboarding is sales-led, SKIP
@@ -2488,6 +2531,11 @@ TASK 28.4 — Self-serve signup                                              [P2
      transactional org+admin+subscription creation as 28.1.
   ACCEPTANCE: either a working self-serve flow, or a recorded decision not to
   build one.
+
+  RECORDED (2026-08-19): skip. Org creation exists at exactly one place in
+  the codebase, PlatformOrganizationController.create(), gated
+  @PreAuthorize("hasRole('PLATFORM_ADMIN')") -- no public signup endpoint
+  anywhere. Confirmed sales-led, not assumed. See docs/SYSTEM-28-ONBOARDING.md.
 
 WEB FRONTEND: trial banner (28.2e), activation checklist (28.3c), signup (28.4).
 MOBILE IMPACT: trial-expiry restriction must be comprehensible in the mobile app.
@@ -3021,6 +3069,14 @@ TASK 35.4 — Export controls                                                [P1
      reason field — that column exists for exactly this.
   ACCEPTANCE: an export produces a DATA_EXPORTED audit row with row count; the
   download link expires.
+
+  PARTIAL (2026-08-19): 3 of 4 sub-items done -- explicit permission (already
+  in place), DATA_EXPORTED audit with filters used (was REPORT_EXPORTED/INFO
+  with no filters), per-user rate limiting on the download endpoint (only
+  generation was limited before). Row count: not captured anywhere in this
+  codebase, needs a schema change -- flagged, not attempted. Time-limited
+  link: still genuinely blocked on SYSTEM 25 (object storage/presigned URLs
+  don't exist). See docs/SYSTEM-35-IMPORT-EXPORT.md.
 
 WEB FRONTEND: import progress and error-report download (35.2); export status.
 MOBILE IMPACT: none.
@@ -3566,47 +3622,191 @@ Mark [x] only when EVERY task in that system has passed its acceptance check
 and the system's SYSTEM VERIFICATION command passes.
 
 LAYER 0 — FOUNDATION
-  [ ] 01  Multi-tenancy (RLS)                    3 tasks   P0
-  [ ] 02  Database Architecture                  4 tasks   P1
-  [ ] 03  Database Migration System              3 tasks   P1
-  [ ] 04  Environment & Config Management        3 tasks   P1
-  [ ] 05  Infrastructure                         3 tasks   P1
-  [ ] 06  CI/CD                                  4 tasks   P1
+  [x] 01  Multi-tenancy (RLS)                    3 tasks   P0  (see docs/SYSTEM-01-MULTI-TENANCY.md;
+                                                                 found+fixed a real partition-level
+                                                                 RLS bypass; flagged user_action_
+                                                                 audit_logs + users as separate gaps)
+  [ ] 02  Database Architecture                  4 tasks   P1  (3.5/4 done — 2.1-2.3 done,
+                                                                 2.4's infra done+verified, one
+                                                                 call site blocked on a transaction-
+                                                                 boundary refactor; see
+                                                                 docs/SYSTEM-02-DATABASE-ARCHITECTURE.md)
+  [x] 03  Database Migration System              3 tasks   P1  (see
+                                                                 docs/SYSTEM-03-DATABASE-MIGRATION-SYSTEM.md;
+                                                                 fixed a real fresh-bootstrap bug in
+                                                                 V058, found via the new CI job)
+  [x] 04  Environment & Config Management        3 tasks   P1  (see
+                                                                 docs/SYSTEM-04-ENVIRONMENT-CONFIG-MANAGEMENT.md;
+                                                                 found+fixed a missing logging
+                                                                 dependency that silently broke every
+                                                                 prod-profile boot, a stale/wrong
+                                                                 .env.example, and a Razorpay
+                                                                 webhook-secret gap)
+  [ ] 05  Infrastructure                         3 tasks   P1  (code complete for 5.1-5.3; 2 of the
+                                                                 3 acceptance checks (5.2's Redis-down
+                                                                 503 flip, 5.3's SIGTERM-mid-import)
+                                                                 not actually observed this session —
+                                                                 see docs/SYSTEM-05-INFRASTRUCTURE.md's
+                                                                 Verification section for why and what
+                                                                 to re-check before marking [x])
+  [ ] 06  CI/CD                                  4 tasks   P1  (6.1-6.3 done; 6.4 is 1/3 --
+                                                                 6.4.c done+verified, 6.4.a/b
+                                                                 deliberately deferred (no PR-merge
+                                                                 workflow yet, no live OCI instance
+                                                                 yet); no live GitHub Actions run
+                                                                 observed this session, changes not
+                                                                 yet pushed; see docs/SYSTEM-06-CI-CD.md)
 
 LAYER 1 — CROSS-CUTTING
-  [ ] 07  Security (crypto, headers, input)      4 tasks   P0
-  [ ] 08  Authentication                         4 tasks   P0
-  [ ] 09  Authorization / RBAC                   4 tasks   P0
-  [ ] 10  Audit Logging                          5 tasks   P0
+  [x] 07  Security (crypto, headers, input)      4 tasks   P0  (see
+                                                                 docs/SYSTEM-07-SECURITY.md; found+
+                                                                 fixed TRUSTED_PROXY_CIDR being CIDR
+                                                                 notation when Tomcat needs a regex,
+                                                                 and a real NPE bug in
+                                                                 DailyDispatchController. TASK 7.2's
+                                                                 acceptance criteria met via a
+                                                                 dedicated real-crypto unit test;
+                                                                 live-instance rotation test
+                                                                 deferred, not yet re-verified on a
+                                                                 real running instance)
+  [x] 08  Authentication                         4 tasks   P0  (see
+                                                                 docs/SYSTEM-08-AUTHENTICATION.md;
+                                                                 8.2 found the one real gap ("revoke
+                                                                 all others" endpoint) in an
+                                                                 otherwise-already-built session
+                                                                 system; 8.3 added org-level MFA
+                                                                 enforcement (new, test-first per
+                                                                 the task's own bypass warning); 8.4
+                                                                 found+fixed real zero-audit failure
+                                                                 branches in all 4 named files)
+  [x] 09  Authorization / RBAC                   4 tasks   P0  (see
+                                                                 docs/SYSTEM-09-AUTHORIZATION-RBAC.md;
+                                                                 found+fixed 401s having zero audit
+                                                                 trail at all across 4 separate code
+                                                                 paths -- only 403s were ever
+                                                                 recorded before this)
+  [x] 10  Audit Logging                          5 tasks   P0  (see
+                                                                 docs/SYSTEM-10-AUDIT-LOGGING.md)
   [ ] 11  Application Logging                    3 tasks   P1
-  [ ] 12  Monitoring & Observability             4 tasks   P0
-  [ ] 13  Error Tracking                         3 tasks   P0
+  [x] 12  Monitoring & Observability             4 tasks   P0  (see
+                                                                 docs/SYSTEM-12-MONITORING-OBSERVABILITY.md;
+                                                                 found+fixed /actuator/prometheus
+                                                                 being completely unregistered --
+                                                                 the property this app used to
+                                                                 enable it is dead in Spring Boot
+                                                                 3.4 -- plus 5 real alerting gaps
+                                                                 across schedulers and payment
+                                                                 webhooks)
+  [x] 13  Error Tracking                         3 tasks   P0  (see
+                                                                 docs/SYSTEM-13-ERROR-TRACKING.md;
+                                                                 Sentry wired disabled-by-default,
+                                                                 SYSTEM 11's MDC prerequisite gap
+                                                                 fixed along the way (orgId/userId
+                                                                 were never actually in MDC, and
+                                                                 requestId was under the wrong
+                                                                 key), 6 real swallowed-exception
+                                                                 bugs found+fixed incl. one
+                                                                 security-critical one. Live
+                                                                 Sentry-dashboard verification
+                                                                 deferred -- no real DSN in this
+                                                                 environment, same as SYSTEM 07
+                                                                 TASK 7.2's precedent)
   [ ] 14  Distributed Tracing                    2 tasks   P2
-  [ ] 15  Caching                                3 tasks   P0
+  [x] 15  Caching                                3 tasks   P0  (see docs/SYSTEM-15-CACHING.md;
+                                                                 15.3 added Micrometer stats for the
+                                                                 3 real caches + stampede protection
+                                                                 for userDetails/lucienContext/
+                                                                 systemPrompts (sync=true) and
+                                                                 feature-flag resolution (new local
+                                                                 Caffeine layer); also deleted 2 dead
+                                                                 cache buckets found while wiring
+                                                                 metrics)
   [ ] 16  Queue / Event System                   3 tasks   P1
   [ ] 17  Background Job System                  3 tasks   P1
 
 LAYER 2 — PLATFORM
-  [ ] 18  User & Organization Management         4 tasks   P0
-  [ ] 19  Subscription & Billing                 5 tasks   P0
-  [ ] 20  Entitlement System                     4 tasks   P0
+  [x] 18  User & Organization Management         4 tasks   P0  (see
+                                                                 docs/SYSTEM-18-USER-ORG-MANAGEMENT.md;
+                                                                 found+fixed org suspension not
+                                                                 actually blocking access at all
+                                                                 (setActive() flipped a flag nothing
+                                                                 ever checked), a hard org-delete
+                                                                 that would have been blocked outright
+                                                                 by the audit-immutability trigger,
+                                                                 and 5 duplicated-PII locations GDPR
+                                                                 erasure needed beyond the users
+                                                                 table. Web/mobile UI pieces (org
+                                                                 detail page, pending-invites section)
+                                                                 deferred to the separate frontend
+                                                                 phase per the user's stated plan --
+                                                                 not required by any of the 4 tasks'
+                                                                 own ACCEPTANCE lines)
+  [x] 19  Subscription & Billing                 5 tasks   P0  (see
+                                                                 docs/SYSTEM-19-SUBSCRIPTION-BILLING.md;
+                                                                 found+fixed Razorpay invoice
+                                                                 mirroring being entirely missing,
+                                                                 out-of-order webhook regression
+                                                                 with no protection, and -- most
+                                                                 significant -- a later migration's
+                                                                 RLS policy silently blocking every
+                                                                 Stripe/Razorpay webhook write to
+                                                                 org_subscriptions/platform_invoices
+                                                                 since webhooks carry no tenant
+                                                                 session context; also affected
+                                                                 DunningScheduler/OrganizationPurgeJob)
+  [x] 20  Entitlement System                     4 tasks   P0  (see docs/SYSTEM-20-ENTITLEMENT.md;
+                                                                 20.4 added 4 of 5 named limit keys
+                                                                 (file uploads/month, storage,
+                                                                 reports/month, Lucien AI tokens --
+                                                                 the last one found already built
+                                                                 but NOT plan-aware, a flat cap for
+                                                                 every plan, now fixed); "API
+                                                                 requests" recorded not-yet-
+                                                                 applicable, no developer API
+                                                                 surface exists (mirrors 20.2's
+                                                                 CUSTOM_INTEGRATIONS finding))
   [ ] 21  Feature Flag System                    3 tasks   P1
   [ ] 22  Usage Metering                         3 tasks   P1
   [ ] 23  API Platform                           4 tasks   P1
   [ ] 24  API Key / Developer Platform           3 tasks   P2
   [ ] 25  File / Object Storage                  5 tasks   P1
-  [ ] 26  Search / Filter / Sort Infrastructure  3 tasks   P0
+  [x] 26  Search / Filter / Sort Infrastructure  3 tasks   P0  (see docs/SYSTEM-26-SEARCH.md;
+                                                                 26.2's real bug wasn't in either
+                                                                 *Specification class -- it was ~20
+                                                                 unvalidated Sort.by() call sites
+                                                                 elsewhere, incl. Allocations' own
+                                                                 list endpoint; 26.3.a (tiebreaker)
+                                                                 done everywhere, 26.3.b (keyset
+                                                                 pagination) deferred, no table
+                                                                 exceeds ~10k rows yet per
+                                                                 docs/DB-HOTSPOTS.md)
   [ ] 27  Search System (full-text / RAG)        3 tasks   P2
 
 LAYER 3 — PRODUCT
-  [ ] 28  Customer Onboarding                    4 tasks   P0
+  [x] 28  Customer Onboarding                    4 tasks   P0  (see docs/SYSTEM-28-ONBOARDING.md;
+                                                                 28.2 new TrialExpiryScheduler
+                                                                 closes the fail-open gap 28.1
+                                                                 itself flagged (expired trials
+                                                                 kept access indefinitely); 28.3
+                                                                 new activation-checklist endpoint;
+                                                                 28.4 skipped, sales-led onboarding
+                                                                 confirmed & recorded, not assumed)
   [ ] 29  Notification System                    4 tasks   P1
   [ ] 30  Email System                           4 tasks   P1
   [ ] 31  Webhook System (outbound)              3 tasks   P2
   [ ] 32  Reporting System                       4 tasks   P1
   [ ] 33  Product Analytics                      3 tasks   P2
   [ ] 34  Workflow / Automation Engine           4 tasks   P1
-  [ ] 35  Import / Export System                 4 tasks   P0
+  [x] 35  Import / Export System                 4 tasks   P0  (see docs/SYSTEM-35-IMPORT-EXPORT.md;
+                                                                 35.4 revisited its own prior
+                                                                 "skip entirely" call -- 3 of 4
+                                                                 sub-items didn't actually need
+                                                                 SYSTEM 25 (permission already
+                                                                 done, audit upgraded to
+                                                                 DATA_EXPORTED+filters, download
+                                                                 rate-limiting added); row count
+                                                                 and time-limited link still open,
+                                                                 flagged not attempted)
   [ ] 36  Integration System                     3 tasks   P2
   [ ] 37  Configuration / Settings System        3 tasks   P2
   [ ] 38  Customer Support System                3 tasks   P2
@@ -3614,7 +3814,10 @@ LAYER 3 — PRODUCT
 LAYER 4 — GOVERNANCE & CONTINUITY
   [ ] 39  Compliance & Privacy                   5 tasks   P0
   [ ] 40  Data Governance                        4 tasks   P1
-  [ ] 41  Backup & Disaster Recovery             4 tasks   P0
+  [x] 41  Backup & Disaster Recovery             4 tasks   P0  (see docs/RUNBOOK-DR.md; restore
+                                                                 test verified locally 2026-08-18,
+                                                                 production/OCI run still pending
+                                                                 SYSTEM 05 provisioning)
   [ ] 42  Admin & Platform Support               4 tasks   P1
 
 TOTALS: 42 systems · 151 tasks · 16 systems at P0

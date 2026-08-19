@@ -136,6 +136,27 @@ class RazorpayPaymentProviderTest {
         assertThat(captor.getValue().getInt("cancel_at_cycle_end")).isEqualTo(1);
     }
 
+    /** SYSTEM 19 TASK 19.1: org_subscriptions.cancel_at_period_end was never persisted anywhere
+     *  on the Razorpay path before this -- set synchronously from this call's own parameter, see
+     *  the method's javadoc for why that is a deliberate exception to "webhooks are the source of
+     *  truth" rather than an architecture violation. */
+    @Test
+    void cancelSubscription_atPeriodEnd_persistsCancelAtPeriodEndLocally() throws RazorpayException {
+        OrgSubscription sub = OrgSubscription.builder().orgId(orgId).razorpaySubscriptionId("sub_xyz")
+                .cancelAtPeriodEnd(false).status(OrgSubscription.Status.ACTIVE).build();
+        when(subRepo.findByOrgId(orgId)).thenReturn(Optional.of(sub));
+        when(subscriptionClient.cancel(org.mockito.ArgumentMatchers.eq("sub_xyz"), any()))
+                .thenReturn(new Subscription(new JSONObject().put("id", "sub_xyz")));
+
+        provider.cancelSubscription(orgId, true);
+
+        assertThat(sub.getCancelAtPeriodEnd()).isTrue();
+        // Status stays webhook-driven (subscription.cancelled is a reliable Razorpay event,
+        // unlike the cancel-at-cycle-end flag) -- this call must not jump ahead of it.
+        assertThat(sub.getStatus()).isEqualTo(OrgSubscription.Status.ACTIVE);
+        org.mockito.Mockito.verify(subRepo).save(sub);
+    }
+
     @Test
     void changePlan_noExistingRazorpaySubscription_throwsIllegalState() {
         OrgSubscription sub = OrgSubscription.builder().orgId(orgId).razorpaySubscriptionId(null).build();

@@ -168,6 +168,7 @@ export type CaseEventType =
   | 'VISIT_LOGGED'
   | 'VISIT_APPROVED'
   | 'VISIT_REJECTED'
+  | 'CALL_MADE'
   | 'PTP_CREATED'
   | 'PTP_FULFILLED'
   | 'PTP_PARTIALLY_FULFILLED'

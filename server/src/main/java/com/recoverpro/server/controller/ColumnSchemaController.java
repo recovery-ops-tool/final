@@ -4,6 +4,7 @@ import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.dto.request.ColumnSchemaRequest;
 import com.recoverpro.server.dto.response.ColumnSchemaResponse;
 import com.recoverpro.server.enums.UploadType;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.service.ColumnSchemaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +23,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ColumnSchemaController {
 
-    private static final String ADMINS = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')";
+    private static final String ADMINS = Authz.ADMINS;
     // A custom role granted COLUMN_CREATE via Role Management can create schemas without
     // needing ORG_ADMIN/PLATFORM_ADMIN — see UserController's matching CAN_CREATE_USER.
     private static final String CAN_CREATE_COLUMN = ADMINS + " or hasAuthority('COLUMN_CREATE')";

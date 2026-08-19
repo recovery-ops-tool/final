@@ -14,6 +14,7 @@ import com.recoverpro.server.repository.DailyVisitListRepository;
 import com.recoverpro.server.repository.PtpRepository;
 import com.recoverpro.server.repository.UserRepository;
 import com.recoverpro.server.repository.VisitLogRepository;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +34,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class FieldAgentDashboardController {
 
-    private static final String FO_OR_LEADS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO')";
+    private static final String FO_OR_LEADS = Authz.LEADS_AND_FO;
 
     private final UserRepository userRepository;
     private final DailyVisitListRepository dispatchRepo;

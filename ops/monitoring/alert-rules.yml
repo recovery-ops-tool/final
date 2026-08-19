@@ -1,0 +1,75 @@
+# SYSTEM 12 TASK 12.3.a -- Prometheus alerting rules.
+#
+# Ready to deploy once a real Prometheus + Alertmanager stack exists -- deliberately NOT wired
+# into docker-compose.yml by this task. The deployment target (docs/INFRA-CURRENT.md) is a single
+# OCI Ampere A1 free-tier instance (2 OCPU / 12GB) already running Postgres, Redis, the backend,
+# the web frontend, Caddy, and Ollama; adding a live Prometheus + Alertmanager pair is a real
+# resource-footprint decision on that box, not a reversible local file edit, so it's flagged for
+# the user rather than committed to silently as a side effect of this task (same reasoning
+# INFRA-CURRENT.md already applies to tts-service: "not wired in here -- flag/ask before adding it
+# to compose").
+#
+# This file only covers the two alert categories that genuinely need Prometheus's windowed-
+# aggregation machinery (a rolling rate/quantile over every request, not just one component's own
+# state). The other five categories TASK 12.3.a lists by name -- circuit breaker OPEN, Hikari pool
+# pending > 0, scheduled job failure, payment webhook failures, Redis unreachable -- already page
+# via the existing in-process OpsAlertService (email) path at effectively zero added resource
+# cost: see CircuitBreakerAlertListener, HikariPoolExhaustionMonitor, RedisUnreachableAlertMonitor,
+# and the alertJobFailure call sites in every @Scheduled job and both webhook controllers. Building
+# Prometheus rules for those too, with no Alertmanager to fire them, would just be unused
+# duplicate config nobody reconciles against the code -- see docs/RUNBOOK-ALERTS.md for the
+# authoritative list covering both delivery channels.
+#
+# Metric names/labels below are Micrometer's real, verified defaults (confirmed via
+# MetricsExportTest against a running instance): http_server_requests_seconds is a Timer, exposed
+# to Prometheus as a *_seconds_count / *_seconds_sum pair plus, for endpoints where
+# management.metrics.distribution.percentiles-histogram is enabled, *_seconds_bucket for
+# histogram_quantile(). Percentile histograms are NOT currently enabled in application.properties
+# -- add `management.metrics.distribution.percentiles-histogram.http.server.requests=true` (or
+# scope it to just these two URIs via a metrics filter) before deploying the latency rules below,
+# otherwise histogram_quantile() has no buckets to compute over. Flagged here rather than enabled
+# unilaterally: it's a small, ongoing per-request overhead best decided alongside standing up the
+# scrape target that will actually consume it.
+
+groups:
+  - name: recoverpro-http
+    rules:
+      - alert: HighServerErrorRate
+        # 5xx as a fraction of all requests, 5-minute window. 5% is a starting point, not a
+        # measured baseline -- SYSTEM 12 TASK 12.4 (SLOs) is where a real baseline gets set from
+        # production traffic; tighten or loosen this once that data exists.
+        expr: >
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            /
+          sum(rate(http_server_requests_seconds_count[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "5xx rate above 5% over the last 5 minutes"
+          runbook: "docs/RUNBOOK-ALERTS.md#highservererrorrate"
+
+      - alert: LoginLatencyP99High
+        expr: >
+          histogram_quantile(0.99,
+            sum(rate(http_server_requests_seconds_bucket{uri="/api/v1/auth/login"}[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "POST /api/v1/auth/login p99 latency above 2s over the last 5 minutes"
+          runbook: "docs/RUNBOOK-ALERTS.md#loginlatencyp99high"
+
+      - alert: AllocationListLatencyP99High
+        expr: >
+          histogram_quantile(0.99,
+            sum(rate(http_server_requests_seconds_bucket{uri="/api/v1/allocations",method="GET"}[5m])) by (le)
+          ) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GET /api/v1/allocations p99 latency above 3s over the last 5 minutes"
+          runbook: "docs/RUNBOOK-ALERTS.md#allocationlistlatencyp99high"

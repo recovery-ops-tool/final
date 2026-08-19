@@ -2,6 +2,7 @@ package com.recoverpro.server.service.impl;
 
 import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
+import com.recoverpro.server.config.ReplicaRoutingContext;
 import com.recoverpro.server.entity.ReportJob;
 import com.recoverpro.server.enums.AuditAction;
 import com.recoverpro.server.enums.AuditResourceType;
@@ -114,14 +115,26 @@ public class ExportServiceImpl implements ExportService {
             Resource resource = new UrlResource(filePath.toUri());
             if (!resource.exists() || !resource.isReadable())
                 throw new BusinessException("Report file not accessible: " + jobId);
+            // TASK 35.4.b: DATA_EXPORTED specifically (not the pre-existing, INFO-severity
+            // REPORT_EXPORTED) -- a downloaded report is a bulk PII export, and this action's
+            // HIGH severity reflects that correctly. "filters used" is job.getParameters(), the
+            // original ReportRequest already serialized onto this row at generation time
+            // (ReportingServiceImpl.enqueueReport). "row count" is NOT captured here -- no report
+            // builder in this codebase currently records one on the ReportJob row; doing so needs
+            // a schema change threaded through every ReportType's builder, out of proportion to
+            // this session's pass. Flagged, not solved.
+            java.util.Map<String, Object> metadata = new java.util.HashMap<>(java.util.Map.of(
+                    "reportType", job.getReportType().name(),
+                    "format", job.getExportFormat().name()));
+            if (job.getParameters() != null) {
+                metadata.put("filters", job.getParameters());
+            }
             auditService.record(AuditEventRequest.builder()
-                    .action(AuditAction.REPORT_EXPORTED)
+                    .action(AuditAction.DATA_EXPORTED)
                     .resourceType(AuditResourceType.REPORT)
                     .resourceId(jobId.toString())
                     .organizationIdOverride(orgId)
-                    .metadata(java.util.Map.of(
-                            "reportType", job.getReportType().name(),
-                            "format", job.getExportFormat().name()))
+                    .metadata(metadata)
                     .build());
             return resource;
         } catch (MalformedURLException e) {
@@ -129,9 +142,16 @@ public class ExportServiceImpl implements ExportService {
         }
     }
 
+    /**
+     * SYSTEM 02 TASK 2.4: routed to the replica -- safe here specifically because this call has
+     * no enclosing {@code @Transactional} of its own, so it gets a fresh, independent connection
+     * checkout every time (unlike {@code ReportJobExecutor.buildReportData}, deliberately NOT
+     * routed -- see {@link ReplicaRoutingContext}'s javadoc for why).
+     */
     @Override
     public ReportJob findReportJob(UUID jobId, UUID orgId) {
-        return reportJobRepository.findByIdAndOrganizationId(jobId, orgId)
-                .orElseThrow(() -> new ResourceNotFoundException("Report job not found: " + jobId));
+        return ReplicaRoutingContext.runOnReplica(() ->
+                reportJobRepository.findByIdAndOrganizationId(jobId, orgId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Report job not found: " + jobId)));
     }
 }

@@ -63,10 +63,13 @@ public class AuditEvent {
     @Column(name = "actor_type", nullable = false, length = 20)
     private AuditActorType actorType;
 
-    /** Snapshot of the role name active at the time of the action (free text, not a fixed enum)
-     *  -- matches RecoverPro's DB-driven, org-customizable Role entity rather than a rival
-     *  closed role list. */
-    @Column(name = "actor_role", length = 100)
+    /** Snapshot of the role name(s) active at the time of the action (free text, not a fixed
+     *  enum) -- matches RecoverPro's DB-driven, org-customizable Role entity rather than a rival
+     *  closed role list. Comma-joined if the actor holds more than one role. 500, not 100 (V108):
+     *  a single role fits comfortably under 100, but the column was originally sized before
+     *  accounting for a principal ever holding several roles at once, which this schema already
+     *  permits. */
+    @Column(name = "actor_role", length = 500)
     private String actorRole;
 
     /** Defaults to actorUserId. Exists so a future impersonation feature has somewhere to record

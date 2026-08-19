@@ -44,17 +44,22 @@ public class AsyncConfig implements AsyncConfigurer {
     @Bean(name = "taskExecutor")
     @Override
     public Executor getAsyncExecutor() {
-        return build("agent-", agentCore, agentMax, agentQueue);
+        // Lucien chat/tool-loop work is conversational, not batch -- worth finishing an
+        // in-flight tool call on shutdown, but not worth making SIGTERM wait as long as the
+        // file/report executors below.
+        return build("agent-", agentCore, agentMax, agentQueue, 30);
     }
 
     @Bean(name = "fileProcessingExecutor")
     public Executor fileProcessingExecutor() {
-        return build("file-proc-", fileCore, fileMax, fileQueue);
+        // SYSTEM 05 TASK 5.3: an in-flight file import/parse should be allowed to finish on
+        // SIGTERM rather than being truncated mid-write.
+        return build("file-proc-", fileCore, fileMax, fileQueue, 60);
     }
 
     @Bean(name = "reportingTaskExecutor")
     public Executor reportingTaskExecutor() {
-        return build("report-", reportCore, reportMax, reportQueue);
+        return build("report-", reportCore, reportMax, reportQueue, 60);
     }
 
     @Override
@@ -65,7 +70,7 @@ public class AsyncConfig implements AsyncConfigurer {
                         method.getName(), ex.getMessage(), ex);
     }
 
-    private Executor build(String prefix, int core, int max, int queue) {
+    private Executor build(String prefix, int core, int max, int queue, int awaitTerminationSeconds) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(core);
         executor.setMaxPoolSize(max);
@@ -73,6 +78,11 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setThreadNamePrefix(prefix);
         executor.setTaskDecorator(mdcPropagatingDecorator());
         executor.setRejectedExecutionHandler(loggingAbortPolicy(prefix));
+        // SYSTEM 05 TASK 5.3: without these two, Spring's shutdown just abandons in-flight
+        // tasks on this executor immediately instead of waiting for them to finish -- the
+        // in-flight-file-import-gets-truncated-on-SIGTERM gap the task calls out.
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(awaitTerminationSeconds);
         executor.initialize();
         return executor;
     }

@@ -4,6 +4,7 @@ import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.dto.request.UpsertGrievanceOfficerRequest;
 import com.recoverpro.server.dto.response.GrievanceOfficerResponse;
 import com.recoverpro.server.security.PlatformAdminAccessGuard;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.GrievanceOfficerService;
 import jakarta.validation.Valid;
@@ -22,10 +23,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class GrievanceOfficerController {
 
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
-    private static final String WRITERS =
-            "hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN')";
+    private static final String READERS = Authz.ALL_STAFF;
+    private static final String WRITERS = Authz.ADMINS;
 
     private final GrievanceOfficerService grievanceOfficerService;
     private final PlatformAdminAccessGuard platformAdminAccessGuard;

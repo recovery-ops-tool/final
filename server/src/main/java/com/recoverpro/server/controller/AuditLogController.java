@@ -1,5 +1,6 @@
 package com.recoverpro.server.controller;
 
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
@@ -9,6 +10,7 @@ import com.recoverpro.server.dto.response.AuditLogResponse;
 import com.recoverpro.server.dto.response.UserActionAuditResponse;
 import com.recoverpro.server.repository.AllocationRepository;
 import com.recoverpro.server.repository.UserRepository;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.AllocationService;
 import com.recoverpro.server.service.AssignmentService;
@@ -31,8 +33,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuditLogController {
 
-    private static final String AUDIT_READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER')";
+    private static final String AUDIT_READERS = Authz.MANAGERS_AND_ABOVE;
 
     private final AuditLogService auditLogService;
     private final UserActionAuditService userActionAuditService;
@@ -57,7 +58,7 @@ public class AuditLogController {
 
         Page<AuditLogResponse> logs = auditLogService.getLogsByOrganization(
                 principal.getOrganizationId(),
-                PageRequest.of(page, size, Sort.by("createdAt").descending()));
+                PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("createdAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(logs)));
     }
 
@@ -72,7 +73,7 @@ public class AuditLogController {
         AssignmentResponse assignment = assignmentService.getAssignmentById(assignmentId);
         assertSameTenant(assignment.getOrganizationId(), principal);
         Page<AuditLogResponse> logs = auditLogService.getLogsByAssignment(
-                assignmentId, PageRequest.of(page, size, Sort.by("createdAt").descending()));
+                assignmentId, PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("createdAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(logs)));
     }
 
@@ -101,7 +102,7 @@ public class AuditLogController {
 
         assertUserInTenant(userId, principal);
         Page<AuditLogResponse> logs = auditLogService.getLogsByPerformedBy(
-                userId, PageRequest.of(page, size, Sort.by("createdAt").descending()));
+                userId, PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("createdAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(logs)));
     }
 
@@ -115,7 +116,7 @@ public class AuditLogController {
 
         assertUserInTenant(userId, principal);
         Page<UserActionAuditResponse> logs = userActionAuditService.getUserActionLogs(
-                userId, PageRequest.of(page, size, Sort.by("createdAt").descending()));
+                userId, PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("createdAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(logs)));
     }
 
@@ -126,7 +127,7 @@ public class AuditLogController {
             @RequestParam(defaultValue = "20") int size) {
 
         Page<UserActionAuditResponse> logs = userActionAuditService.getAllUserActionLogs(
-                PageRequest.of(page, size, Sort.by("createdAt").descending()));
+                PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("createdAt").descending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(logs)));
     }
 

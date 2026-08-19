@@ -22,6 +22,7 @@ import com.recoverpro.server.repository.CollectionRepository;
 import com.recoverpro.server.repository.MonthlyLoanBookSnapshotRepository;
 import com.recoverpro.server.repository.NpaRecordRepository;
 import com.recoverpro.server.repository.ReportJobRepository;
+import com.recoverpro.server.service.EntitlementService;
 import com.recoverpro.server.service.ExportService;
 import com.recoverpro.server.service.ReportingService;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +59,7 @@ public class ReportingServiceImpl implements ReportingService {
     private final AllocationRepository allocationRepository;
     private final NpaRecordRepository npaRecordRepository;
     private final ReportJobExecutor reportJobExecutor;
+    private final EntitlementService entitlementService;
 
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
@@ -386,6 +388,12 @@ public class ReportingServiceImpl implements ReportingService {
     @Override
     @Transactional
     public ReportJobResponse enqueueReport(ReportRequest request, UUID requestedBy) {
+        // TASK 20.4: cheapest possible rejection first, before the existing-job existence check
+        // or any DB write.
+        if (!entitlementService.canGenerateReport(request.getOrganizationId())) {
+            throw new BusinessException(
+                    "Monthly report generation limit reached for this organization's plan. Upgrade your plan or contact support.");
+        }
         List<ReportStatus> activeStatuses = List.of(ReportStatus.QUEUED, ReportStatus.GENERATING);
         if (reportJobRepository.existsByRequestedByAndStatusIn(requestedBy, activeStatuses)) {
             throw new BusinessException(

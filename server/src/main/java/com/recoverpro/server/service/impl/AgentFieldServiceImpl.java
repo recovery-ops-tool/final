@@ -172,7 +172,13 @@ public class AgentFieldServiceImpl implements AgentFieldService {
                         request.getAccuracy() != null ? request.getAccuracy() : 0.0,
                         agentName);
             });
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            // SYSTEM 13 TASK 13.2: was silent -- non-fatal (the ping itself is already persisted
+            // above; this is just the live-map relay), but inconsistent with every other broadcast
+            // failure in this codebase (LiveTrackWebSocketHandler/SosAudioWebSocketHandler both log
+            // at WARN for the exact same kind of failure).
+            log.warn("Live-track relay failed for agentId={}: {}", agentId, e.getMessage());
+        }
     }
 
     @Override

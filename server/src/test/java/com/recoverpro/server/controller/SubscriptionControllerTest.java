@@ -1,6 +1,8 @@
 package com.recoverpro.server.controller;
 
 import com.recoverpro.server.common.exception.BusinessException;
+import com.recoverpro.server.dto.request.ChangePlanRequest;
+import com.recoverpro.server.dto.request.CheckoutRequest;
 import com.recoverpro.server.entity.OrgSubscription;
 import com.recoverpro.server.repository.OrgSubscriptionRepository;
 import com.recoverpro.server.security.UserPrincipal;
@@ -13,7 +15,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -52,6 +53,18 @@ class SubscriptionControllerTest {
         return p;
     }
 
+    private static ChangePlanRequest changePlanReq(String plan) {
+        ChangePlanRequest req = new ChangePlanRequest();
+        req.setPlan(plan);
+        return req;
+    }
+
+    private static CheckoutRequest checkoutReq(String plan) {
+        CheckoutRequest req = new CheckoutRequest();
+        req.setPlan(plan);
+        return req;
+    }
+
     @Test
     void selectFree_platformAdmin_throwsCleanBusinessException() {
         SubscriptionController controller = newController();
@@ -80,7 +93,7 @@ class SubscriptionControllerTest {
         SubscriptionController controller = newController();
         UserPrincipal admin = principalWithOrg(null);
 
-        assertThrows(BusinessException.class, () -> controller.checkout(Map.of("plan", "GROWTH"), admin));
+        assertThrows(BusinessException.class, () -> controller.checkout(checkoutReq("GROWTH"), admin));
     }
 
     @Test
@@ -101,7 +114,7 @@ class SubscriptionControllerTest {
         PaymentProvider provider = mock(PaymentProvider.class);
         when(paymentProviderResolver.resolveForOrg(orgId)).thenReturn(provider);
 
-        controller.changePlan(Map.of("plan", "ENTERPRISE"), orgAdmin);
+        controller.changePlan(changePlanReq("ENTERPRISE"), orgAdmin);
 
         verify(provider).changePlan(orgId, "ENTERPRISE", true);
         verify(auditService).record(any());
@@ -117,7 +130,7 @@ class SubscriptionControllerTest {
         PaymentProvider provider = mock(PaymentProvider.class);
         when(paymentProviderResolver.resolveForOrg(orgId)).thenReturn(provider);
 
-        controller.changePlan(Map.of("plan", "GROWTH"), orgAdmin);
+        controller.changePlan(changePlanReq("GROWTH"), orgAdmin);
 
         verify(provider).changePlan(orgId, "GROWTH", false);
     }
@@ -131,7 +144,7 @@ class SubscriptionControllerTest {
         when(subRepo.findByOrgId(orgId)).thenReturn(Optional.of(sub));
 
         assertThrows(BusinessException.class,
-                () -> controller.changePlan(Map.of("plan", "GROWTH"), orgAdmin));
+                () -> controller.changePlan(changePlanReq("GROWTH"), orgAdmin));
 
         verify(paymentProviderResolver, never()).resolveForOrg(any());
     }
@@ -144,7 +157,7 @@ class SubscriptionControllerTest {
         when(subRepo.findByOrgId(orgId)).thenReturn(Optional.empty());
 
         assertThrows(BusinessException.class,
-                () -> controller.changePlan(Map.of("plan", "GROWTH"), orgAdmin));
+                () -> controller.changePlan(changePlanReq("GROWTH"), orgAdmin));
     }
 
     @Test
@@ -153,6 +166,6 @@ class SubscriptionControllerTest {
         UserPrincipal admin = principalWithOrg(null);
 
         assertThrows(BusinessException.class,
-                () -> controller.changePlan(Map.of("plan", "GROWTH"), admin));
+                () -> controller.changePlan(changePlanReq("GROWTH"), admin));
     }
 }

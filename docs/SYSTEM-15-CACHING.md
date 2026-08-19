@@ -78,14 +78,89 @@ No code changes were needed for this task — there is no cross-tenant cache lea
 very small cache surface. Locked in with `loadUserByUsername_twoDifferentOrgsUsers_neverCrossContaminate`
 in the same new test file, proving two different orgs' cached users never collide.
 
-## Not done this session (deferred)
+## TASK 15.3 — Cache metrics and stampede protection [DONE] (2026-08-19 session)
 
-**TASK 15.3 — Cache metrics and stampede protection** [P2]: Caffeine `recordStats()`/Micrometer
-export and concurrent-cold-key locking. Not started — P2, distinct from 15.1/15.2's P0 correctness
-concerns, and the tasklist's own severity marking puts it lowest priority in this system.
+### 15.3.a — Micrometer export
+
+`recordStats()` was already on for every L1 Caffeine cache (this file, prior session) but nothing
+ever exported those stats. Root cause: Spring Boot's own cache-metrics auto-binder
+(`CacheMetricsRegistrar`) only recognizes a cache that IS a `CaffeineCache`, and
+`TwoTierCacheManager` hands every caller a `TwoTierCache` wrapper instead — so the auto-binder
+silently bound nothing, with no error or warning.
+
+Fixed in `RedisCacheConfig.cacheManager()`: each L1 Caffeine cache's *native* `Cache` (unwrapped
+via `getNativeCache()`, before the `TwoTierCache` wrapper is built) is registered directly with
+`CaffeineCacheMetrics.monitor(meterRegistry, native, cacheName)`. This sidesteps the wrapper-type
+mismatch entirely and puts `cache_gets_total`/`cache_puts_total`/`cache_evictions_total`/
+`cache_size` on `/actuator/prometheus`, tagged by `cache=userDetails|lucienContext|systemPrompts`.
+
+**Found while wiring this — two dead cache buckets, deleted**: `RedisCacheConfig` also declared a
+`"featureFlags"` and a `"default"` L1 Caffeine cache + matching Redis `withCacheConfiguration`
+entries. Grepped every `@Cacheable`/`@CacheEvict`/`@CachePut` and every `cacheManager.getCache(...)`
+call in `server/src/main/java` — neither name is referenced anywhere. Feature-flag resolution is
+cached by `FeatureFlagService` directly against Redis (a deliberate SYSTEM 20 TASK 20.3 design, a
+prior session, not this cache manager), and nothing anywhere uses a cache literally named
+`"default"`. Registering metrics for these would have shipped two permanently-empty series that
+look exactly like real caches nothing uses — actively misleading on a dashboard — so they were
+removed instead of instrumented.
+
+**Test**: `RedisCacheConfigTest` (new) — calls the `cacheManager()` bean method directly (no Spring
+context needed) and asserts `cache.gets`/`cache.puts` meters exist for all 3 real caches, and that
+`"featureFlags"`/`"default"` are gone from `getCacheNames()`.
+
+### 15.3.b — Stampede protection
+
+Two different mechanisms were needed, because the codebase's caching isn't uniform (SYSTEM 15
+TASK 15.2 already established there are only 3 `@Cacheable` namespaces, plus feature-flag
+resolution's own hand-rolled Redis cache — see that task's audit above):
+
+**userDetails / lucienContext / systemPrompts** (`TwoTierCache`-backed, Spring `@Cacheable`): added
+`sync = true` to all three annotations, and rewrote `TwoTierCache.get(Object key, Callable<T>
+valueLoader)` — the method Spring's cache aspect calls only when `sync = true` — to route through
+the *native* Caffeine cache's atomic `get(key, mappingFunction)` instead of the previous
+`l1.get()` / `l2Read()` / `valueLoader.call()` / `put()` sequence. That sequence was not atomic:
+`sync = true` alone would NOT have fixed the stampede, since concurrent callers could each pass the
+L1-miss and L2-miss checks before any of them reached `valueLoader.call()`. Caffeine's native
+`Cache.get(key, Function)` guarantees the function runs at most once per key, with other callers
+blocking on the in-flight computation — that guarantee now backs all three caches' loader path
+(L2/Redis check plus `valueLoader.call()` plus L2 write-through, all inside the one atomic mapping
+function).
+
+**Feature-flag resolution** (`FeatureFlagService.isEnabled()`): not behind Spring's cache
+abstraction at all (hand-rolled `StringRedisTemplate` reads/writes, SYSTEM 20 TASK 20.3), so it had
+no Caffeine layer to make atomic. Added a small in-process single-flight cache
+(`stampedeGuard`, a `Caffeine` `Cache<String, Boolean>`, 5s `expireAfterWrite` as a safety bound
+only) wrapping the existing Redis-then-DB resolution. Correctness against staleness (not just
+stampede) required wiring `evictCache()` to also `stampedeGuard.invalidate(key)` on every write —
+without that, a write on the very instance that just wrote it could still serve its own stale
+locally-cached read until the 5s bound expired, which would have silently regressed the guarantee
+TASK 20.3's own test locks in (`set_evictsCache_soNextEntitlementCheckReflectsChangeImmediately`,
+unmodified, still passes). Keyed on `organizationId + flagKey` only, not `defaultIfMissing` — the
+sole caller (`EntitlementServiceImpl.hasFeature()`) always passes `false`, documented on the field
+since a future caller passing a different default per key would need this reworked. Registered with
+`CaffeineCacheMetrics` too (`"featureFlagResolution"`), for the same 15.3.a reasons.
+
+Constructor change: `FeatureFlagService` now takes a `MeterRegistry` (Lombok
+`@RequiredArgsConstructor`); `initStampedeGuard()` is `@PostConstruct` (package-private, so the one
+non-Spring test construction path — `FeatureFlagServiceTest` — calls it explicitly after `new`).
+
+"Report data" (task text's other named example): confirmed via TASK 15.2's exhaustive audit there
+is no such cache anywhere in the codebase to protect — not deferred, genuinely doesn't exist yet.
+
+**Tests** (all new): `AgentContextServiceImplCachingTest.buildContext_concurrentColdSession_
+collapsesToOneComputation` and `FeatureFlagServiceTest.isEnabled_concurrentColdKey_
+collapsesToOneDbResolution` — both spin up N threads racing a `CountDownLatch`-gated call against
+the same never-before-seen key, with a `Thread.sleep` in the mocked backing call to widen the race
+window, and assert exactly one backing invocation plus identical results across all callers.
+`RedisCacheConfigTest.caffeineCache_getOrCompute_collapsesConcurrentColdKeyToOneComputation` proves
+the same guarantee at the raw-Caffeine-primitive level `TwoTierCache` now relies on. This is the
+literal acceptance wording: "a concurrent cold-key test produces one backing computation, not many."
 
 ## Verification
 
-Targeted: `UserServiceImplCacheEvictionTest` + `UserServiceImplTest` — see session's final report
-for pass/fail counts. Full suite and SYSTEM 15's own specified command
-(`-Dtest='*Cache*Test'`) run at the end of this session.
+Targeted: `mvn -f server/pom.xml test -Dtest='FeatureFlagServiceTest,AgentContextServiceImplCachingTest,
+SystemPromptServiceImplTest,UserServiceImplTest,EntitlementServiceImplTest,RequiresFeatureAspectTest'`
+— 49/49 passed. `-Dtest='*Cache*Test'` (SYSTEM 15's own specified command) — 6/6 passed
+(`RedisCacheConfigTest` + `UserServiceImplCacheEvictionTest`; doesn't glob-match the other cache
+tests above by class name, run separately). Full `mvn -f server/pom.xml clean test` run at the end
+of this session — see session's final report for pass/fail counts.

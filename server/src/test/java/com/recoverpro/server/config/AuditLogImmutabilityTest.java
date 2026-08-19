@@ -5,7 +5,9 @@ import com.recoverpro.server.entity.Allocation;
 import com.recoverpro.server.entity.AllocationAuditLog;
 import com.recoverpro.server.entity.AuditEvent;
 import com.recoverpro.server.entity.FileUpload;
+import com.recoverpro.server.entity.InvoiceLineItem;
 import com.recoverpro.server.entity.Organization;
+import com.recoverpro.server.entity.PlatformInvoice;
 import com.recoverpro.server.entity.SettlementAuditLog;
 import com.recoverpro.server.entity.SettlementOffer;
 import com.recoverpro.server.entity.User;
@@ -18,11 +20,14 @@ import com.recoverpro.server.enums.AuditSeverity;
 import com.recoverpro.server.enums.AuditSource;
 import com.recoverpro.server.enums.FileUploadStatus;
 import com.recoverpro.server.enums.OrganizationType;
+import com.recoverpro.server.enums.PaymentProviderType;
 import com.recoverpro.server.enums.UploadType;
 import com.recoverpro.server.repository.AllocationAuditLogRepository;
 import com.recoverpro.server.repository.AllocationRepository;
 import com.recoverpro.server.repository.AuditEventRepository;
 import com.recoverpro.server.repository.FileUploadRepository;
+import com.recoverpro.server.repository.InvoiceLineItemRepository;
+import com.recoverpro.server.repository.PlatformInvoiceRepository;
 import com.recoverpro.server.repository.SettlementAuditLogRepository;
 import com.recoverpro.server.repository.SettlementOfferRepository;
 import com.recoverpro.server.repository.UserActionAuditLogRepository;
@@ -75,6 +80,8 @@ class AuditLogImmutabilityTest extends AbstractIntegrationTest {
     @Autowired private SettlementOfferRepository settlementOfferRepository;
     @Autowired private UserActionAuditLogRepository userActionAuditLogRepository;
     @Autowired private AuditEventRepository auditEventRepository;
+    @Autowired private PlatformInvoiceRepository platformInvoiceRepository;
+    @Autowired private InvoiceLineItemRepository invoiceLineItemRepository;
 
     @AfterEach
     void clearRlsContext() {
@@ -250,6 +257,140 @@ class AuditLogImmutabilityTest extends AbstractIntegrationTest {
         assertThat(saved.getId()).isNotNull();
 
         assertUpdateAndDeleteRejected("unified_audit_events", "reason", saved.getId());
+    }
+
+    /** SYSTEM 19 TASK 19.5: invoice_line_items has no legitimate update path at all
+     *  (GstInvoiceLineItemServiceImpl only ever INSERTs) -- reuses fn_audit_log_immutable()
+     *  directly, same convention V084 used for settlement/allocation audit logs. RLS on this
+     *  table requires org context (see V086), unlike the platform_invoices tests below. */
+    @Test
+    void invoiceLineItem_insertSucceeds_updateAndDeleteAreRejected() throws SQLException {
+        Organization org = organizationRepository.save(Organization.builder()
+                .name("invoice-line-item-immutable-" + UUID.randomUUID())
+                .code(("T" + UUID.randomUUID().toString().replace("-", "")).substring(0, 20))
+                .organizationType(OrganizationType.ORGANIZATION)
+                .isActive(true)
+                .lookupHashPepper(UUID.randomUUID().toString().replace("-", "")
+                        + UUID.randomUUID().toString().replace("-", ""))
+                .build());
+        RlsOrgIdHolder.set(org.getId());
+
+        PlatformInvoice invoice = platformInvoiceRepository.save(PlatformInvoice.builder()
+                .orgId(org.getId())
+                .provider(PaymentProviderType.STRIPE)
+                .providerInvoiceId("in_immutable_" + UUID.randomUUID())
+                .status("open")
+                .currency("inr")
+                .build());
+
+        InvoiceLineItem saved = invoiceLineItemRepository.save(InvoiceLineItem.builder()
+                .invoiceId(invoice.getId())
+                .description("Pre-tamper line item")
+                .unitAmount(10000L)
+                .lineTotal(10000L)
+                .currency("inr")
+                .build());
+        assertThat(saved.getId()).isNotNull();
+
+        assertUpdateAndDeleteRejected("invoice_line_items", "description", saved.getId());
+    }
+
+    /**
+     * SYSTEM 19 TASK 19.5: platform_invoices CANNOT reuse the blanket "any UPDATE fails" trigger
+     * (unlike invoice_line_items above) -- the SAME row legitimately transitions open -> paid via
+     * StripeWebhookService.upsertInvoice/RazorpayWebhookService.mirrorInvoice, so this proves the
+     * conditional trigger's three real behaviors together: (1) a financial field on an
+     * ALREADY-terminal row is rejected, (2) a same-value "redelivery" on that same row is a safe
+     * no-op (proves webhook retry semantics still work), (3) a non-financial field
+     * (hosted_invoice_url) stays freely updatable even once terminal.
+     */
+    @Test
+    void platformInvoice_onceTerminal_financialFieldRejectedButNoOpAndNonFinancialFieldsAllowed() throws SQLException {
+        Organization org = organizationRepository.save(Organization.builder()
+                .name("platform-invoice-immutable-" + UUID.randomUUID())
+                .code(("T" + UUID.randomUUID().toString().replace("-", "")).substring(0, 20))
+                .organizationType(OrganizationType.ORGANIZATION)
+                .isActive(true)
+                .lookupHashPepper(UUID.randomUUID().toString().replace("-", "")
+                        + UUID.randomUUID().toString().replace("-", ""))
+                .build());
+
+        PlatformInvoice invoice = platformInvoiceRepository.save(PlatformInvoice.builder()
+                .orgId(org.getId())
+                .provider(PaymentProviderType.STRIPE)
+                .providerInvoiceId("in_terminal_" + UUID.randomUUID())
+                .status("paid")
+                .amountDue(299900L)
+                .amountPaid(299900L)
+                .currency("inr")
+                .build());
+
+        try (Connection conn = dataSource.getConnection()) {
+            conn.setAutoCommit(false);
+
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE platform_invoices SET amount_paid = 1 WHERE id = ?")) {
+                ps.setObject(1, invoice.getId());
+                assertThatThrownBy(ps::executeUpdate).hasMessageContaining("immutable");
+            } finally {
+                conn.rollback();
+            }
+
+            // Same value as already stored -- a webhook redelivery of the identical event must
+            // remain a safe no-op, not start failing once an invoice is terminal.
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE platform_invoices SET amount_paid = 299900 WHERE id = ?")) {
+                ps.setObject(1, invoice.getId());
+                assertThat(ps.executeUpdate()).isEqualTo(1);
+            } finally {
+                conn.commit();
+            }
+
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE platform_invoices SET hosted_invoice_url = 'https://example.test/new' WHERE id = ?")) {
+                ps.setObject(1, invoice.getId());
+                assertThat(ps.executeUpdate())
+                        .as("a document URL refresh is not a correction of the financial record")
+                        .isEqualTo(1);
+            } finally {
+                conn.commit();
+            }
+        }
+    }
+
+    /** The normal, expected open -> paid lifecycle transition must still work -- this trigger only
+     *  protects a row that is ALREADY terminal, not the transition that makes it so. */
+    @Test
+    void platformInvoice_openRow_freelyTransitionsToTerminal() throws SQLException {
+        Organization org = organizationRepository.save(Organization.builder()
+                .name("platform-invoice-open-" + UUID.randomUUID())
+                .code(("T" + UUID.randomUUID().toString().replace("-", "")).substring(0, 20))
+                .organizationType(OrganizationType.ORGANIZATION)
+                .isActive(true)
+                .lookupHashPepper(UUID.randomUUID().toString().replace("-", "")
+                        + UUID.randomUUID().toString().replace("-", ""))
+                .build());
+
+        PlatformInvoice invoice = platformInvoiceRepository.save(PlatformInvoice.builder()
+                .orgId(org.getId())
+                .provider(PaymentProviderType.STRIPE)
+                .providerInvoiceId("in_open_" + UUID.randomUUID())
+                .status("open")
+                .amountDue(299900L)
+                .amountPaid(0L)
+                .currency("inr")
+                .build());
+
+        try (Connection conn = dataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE platform_invoices SET status = 'paid', amount_paid = 299900 WHERE id = ?")) {
+                ps.setObject(1, invoice.getId());
+                assertThat(ps.executeUpdate()).isEqualTo(1);
+            } finally {
+                conn.commit();
+            }
+        }
     }
 
     /**

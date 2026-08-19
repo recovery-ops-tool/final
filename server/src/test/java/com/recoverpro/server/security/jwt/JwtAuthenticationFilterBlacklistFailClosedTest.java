@@ -1,5 +1,6 @@
 package com.recoverpro.server.security.jwt;
 
+import com.recoverpro.server.security.AccessDenialAuditor;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,13 +24,15 @@ class JwtAuthenticationFilterBlacklistFailClosedTest {
     @Mock private UserDetailsService userDetailsService;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private SseTicketService sseTicketService;
+    @Mock private AccessDenialAuditor accessDenialAuditor;
     @Mock private FilterChain filterChain;
 
     private JwtAuthenticationFilter filter;
 
     @BeforeEach
     void setUp() {
-        filter = new JwtAuthenticationFilter(jwtTokenProvider, userDetailsService, redisTemplate, sseTicketService);
+        filter = new JwtAuthenticationFilter(
+                jwtTokenProvider, userDetailsService, redisTemplate, sseTicketService, accessDenialAuditor);
     }
 
     @Test

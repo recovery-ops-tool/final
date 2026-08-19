@@ -18,9 +18,13 @@ import com.recoverpro.server.entity.Role;
 import com.recoverpro.server.entity.User;
 import com.recoverpro.server.entity.UserPermission;
 import com.recoverpro.server.mapper.UserMapper;
+import com.recoverpro.server.repository.ChatSessionRepository;
 import com.recoverpro.server.repository.PasswordResetTokenRepository;
 import com.recoverpro.server.repository.PermissionRepository;
+import com.recoverpro.server.repository.PtpHistoryRepository;
+import com.recoverpro.server.repository.PtpRepository;
 import com.recoverpro.server.repository.RoleRepository;
+import com.recoverpro.server.repository.UserCreationRequestRepository;
 import com.recoverpro.server.repository.UserPermissionRepository;
 import com.recoverpro.server.repository.UserRepository;
 import com.recoverpro.server.enums.AuditAction;
@@ -70,6 +74,12 @@ public class UserServiceImpl implements UserService {
     private final EmailService emailService;
     private final AppProperties appProperties;
     private final CustomUserDetailsService customUserDetailsService;
+    // SYSTEM 18 TASK 18.4: erasure-only dependencies -- each repository backs one denormalized-PII
+    // location eraseUserData() scrubs beyond the users row itself.
+    private final PtpHistoryRepository ptpHistoryRepository;
+    private final PtpRepository ptpRepository;
+    private final ChatSessionRepository chatSessionRepository;
+    private final UserCreationRequestRepository userCreationRequestRepository;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -317,6 +327,11 @@ public class UserServiceImpl implements UserService {
         user.setFirstName("[Deleted]");
         user.setLastName("[User]");
         user.setEnabled(false);
+        // SYSTEM 18 TASK 18.4.a: mfaSecret is a live TOTP seed, not covered by the name/email
+        // scrub above -- a "deleted" account whose secret is still intact isn't actually scrubbed,
+        // it just can't log in through the ordinary password path.
+        user.setMfaSecret(null);
+        user.setMfaEnabled(false);
         user.setDeletedAt(Instant.now());
         userRepository.save(user);
         auditLogService.logUserAction(callerId(), "USER_DELETED",
@@ -329,6 +344,101 @@ public class UserServiceImpl implements UserService {
                 .resourceType(AuditResourceType.USER)
                 .resourceId(targetUserId.toString())
                 .metadata(Map.of("deleted", "true"))
+                .build());
+        evictUserCacheAfterCommit(originalEmail);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserResponse> listPendingInvites(UUID callerOrgId) {
+        if (callerOrgId == null) return List.of();
+        return userRepository.findPendingInvitesByOrganizationId(callerOrgId).stream()
+                .map(userMapper::toResponse).toList();
+    }
+
+    @Override
+    public void resendInvite(UUID callerOrgId, UUID targetUserId) {
+        User user = requireSameOrg(callerOrgId, targetUserId);
+        requirePendingInvite(user, "resend the invite for");
+        sendWelcomeOtp(user);
+        auditLogService.logUserAction(callerId(), "USER_INVITE_RESENT",
+                "Resent invite for user id=" + targetUserId);
+    }
+
+    @Override
+    public void revokeInvite(UUID callerOrgId, UUID targetUserId) {
+        User user = requireSameOrg(callerOrgId, targetUserId);
+        requireNotSelf(targetUserId, "revoke the invite for");
+        requirePendingInvite(user, "revoke the invite for");
+        user.setEnabled(false);
+        userRepository.save(user);
+        passwordResetTokenRepository.invalidateAllByUserId(user.getId());
+        auditLogService.logUserAction(callerId(), "USER_INVITE_REVOKED",
+                "Revoked pending invite for user id=" + targetUserId);
+        auditService.record(AuditEventRequest.builder()
+                .action(AuditAction.USER_DEACTIVATED)
+                .resourceType(AuditResourceType.USER)
+                .resourceId(targetUserId.toString())
+                .metadata(Map.of("inviteRevoked", "true"))
+                .build());
+        evictUserCacheAfterCommit(user.getEmail());
+    }
+
+    /** SYSTEM 18 TASK 18.3.a: "pending" means never completed onboarding -- passwordChangedAt is
+     *  NOT a usable signal (it defaults to the creation instant via @Builder.Default, so it is
+     *  never actually null), but lastLoginAt only gets set by a real successful login, which is
+     *  only possible after the user has redeemed their welcome OTP and set a real password. */
+    private void requirePendingInvite(User user, String action) {
+        if (user.getLastLoginAt() != null) {
+            throw new BusinessException(
+                    "Cannot " + action + " a user who has already completed onboarding");
+        }
+    }
+
+    /**
+     * SYSTEM 18 TASK 18.4: erasure path for a verified GDPR data-subject request, distinct from
+     * {@link #deleteUser} (an ordinary, reversible-in-spirit offboarding). This scrubs the same
+     * users-row fields deleteUser does, PLUS every other table known to hold a denormalized copy
+     * of this user's identity (see docs/PRIVACY.md for the full inventory and the audit-trail
+     * tombstoning position taken here). Sessions are killed outright rather than left to expire.
+     */
+    @Override
+    public void eraseUserData(UUID callerOrgId, UUID targetUserId, String reason) {
+        User user = requireSameOrg(callerOrgId, targetUserId);
+        requireNotSelf(targetUserId, "erase");
+        requireNotLastPlatformAdmin(user, "erase");
+
+        String originalEmail = user.getEmail();
+        String tombstoneEmail = "erased-" + user.getId() + "@recoverpro.internal";
+        String tombstoneName = "[Erased]";
+
+        user.setEmail(tombstoneEmail);
+        user.setFirstName(tombstoneName);
+        user.setLastName(tombstoneName);
+        user.setEnabled(false);
+        user.setMfaSecret(null);
+        user.setMfaEnabled(false);
+        user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID() + UUID.randomUUID().toString()));
+        user.setDeletedAt(Instant.now());
+        userRepository.save(user);
+
+        passwordResetTokenRepository.invalidateAllByUserId(user.getId());
+
+        ptpHistoryRepository.scrubChangedByName(user.getId(), tombstoneName);
+        ptpRepository.scrubAgentName(user.getId(), tombstoneName);
+        chatSessionRepository.scrubAgentFirstName(user.getId(), tombstoneName);
+        userCreationRequestRepository.scrubByCreatedUserId(user.getId(), tombstoneEmail, tombstoneName);
+
+        // unified_audit_events.actor_user_id is a bare FK to users(id), never a denormalized
+        // name/email copy -- once the users row above is scrubbed, any audit query resolving that
+        // FK already sees the tombstone. Nothing further to do there; see docs/PRIVACY.md.
+        auditLogService.logUserAction(callerId(), "USER_DATA_ERASED",
+                "Erased user id=" + targetUserId + " (GDPR data-subject request); reason=" + reason);
+        auditService.record(AuditEventRequest.builder()
+                .action(AuditAction.USER_DATA_ERASED)
+                .resourceType(AuditResourceType.USER)
+                .resourceId(targetUserId.toString())
+                .reason(reason)
                 .build());
         evictUserCacheAfterCommit(originalEmail);
     }

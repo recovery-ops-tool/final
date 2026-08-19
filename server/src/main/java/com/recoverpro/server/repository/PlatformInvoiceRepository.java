@@ -14,7 +14,7 @@ import java.util.UUID;
 @Repository
 public interface PlatformInvoiceRepository extends JpaRepository<PlatformInvoice, UUID> {
 
-    Optional<PlatformInvoice> findByStripeInvoiceId(String stripeInvoiceId);
+    Optional<PlatformInvoice> findByProviderInvoiceId(String providerInvoiceId);
 
     /** One org's invoice history, newest first. */
     List<PlatformInvoice> findByOrgIdOrderByIssuedAtDesc(UUID orgId);

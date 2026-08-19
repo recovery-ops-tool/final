@@ -70,7 +70,7 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
             @AuthenticationPrincipal UserPrincipal principal,
-            @RequestBody(required = false) LogoutRequest body,
+            @Valid @RequestBody(required = false) LogoutRequest body,
             HttpServletRequest request) {
         String token = extractBearerToken(request);
         String refreshToken = body != null ? body.getRefreshToken() : null;
@@ -102,6 +102,17 @@ public class AuthController {
             @PathVariable UUID id) {
         authService.revokeSession(principal.getId(), id);
         return ResponseEntity.ok(ApiResponse.of("Session revoked", null));
+    }
+
+    // SYSTEM 08 TASK 8.2.c: "revoking all others" -- distinct from /logout-all, which also signs
+    // the caller's own current session out.
+    @PreAuthorize("isAuthenticated()")
+    @DeleteMapping("/sessions")
+    public ResponseEntity<ApiResponse<Void>> revokeOtherSessions(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestHeader(value = "X-Device-Id", required = false) String deviceId) {
+        int revoked = authService.revokeOtherSessions(principal.getId(), deviceId);
+        return ResponseEntity.ok(ApiResponse.of(revoked + " other session(s) revoked", null));
     }
 
     @PreAuthorize("permitAll()")

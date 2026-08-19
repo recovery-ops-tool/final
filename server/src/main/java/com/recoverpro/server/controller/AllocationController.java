@@ -6,10 +6,12 @@ import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
 import com.recoverpro.server.dto.request.AllocationFilterRequest;
 import com.recoverpro.server.dto.request.BulkAssignToFoRequest;
+import com.recoverpro.server.dto.request.LinkBorrowerRequest;
 import com.recoverpro.server.dto.request.UpdateAllocationDispositionRequest;
 import com.recoverpro.server.dto.request.UpdateAllocationStatusRequest;
 import com.recoverpro.server.dto.response.AllocationResponse;
 import com.recoverpro.server.enums.AllocationStatus;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.AllocationService;
 import com.recoverpro.server.service.IdempotencyKeyService;
@@ -23,7 +25,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -32,12 +33,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AllocationController {
 
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
-    private static final String LEADS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
-    private static final String ADMINS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')";
+    private static final String READERS = Authz.ALL_STAFF;
+    private static final String LEADS = Authz.LEADS;
+    private static final String ADMINS = Authz.ADMINS;
 
     private final AllocationService allocationService;
     private final IdempotencyKeyService idempotencyKeyService;
@@ -168,20 +166,11 @@ public class AllocationController {
     public ResponseEntity<ApiResponse<AllocationResponse>> linkBorrower(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID id,
-            @RequestBody Map<String, String> body) {
+            @Valid @RequestBody LinkBorrowerRequest body) {
         AllocationResponse current = allocationService.getAllocationById(id);
         assertSameTenant(current.getOrganizationId(), principal);
-        String raw = body.get("borrowerId");
-        if (raw == null || raw.isBlank()) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("borrowerId required"));
-        }
-        UUID borrowerId;
-        try {
-            borrowerId = UUID.fromString(raw);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("borrowerId must be a UUID"));
-        }
-        return ResponseEntity.ok(ApiResponse.success(allocationService.linkBorrower(id, borrowerId, principal.getId())));
+        return ResponseEntity.ok(ApiResponse.success(
+                allocationService.linkBorrower(id, body.getBorrowerId(), principal.getId())));
     }
 
     private boolean isPlatformAdmin(UserPrincipal p) {

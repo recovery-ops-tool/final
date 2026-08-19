@@ -5,7 +5,7 @@ import {
   useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync,
 } from 'expo-audio';
 import { Phone, Mic, MicOff } from 'lucide-react-native';
-import CallRecording from 'call-recording';
+// import CallRecording from 'call-recording';
 import { useTheme } from '@/theme/useTheme';
 import {
   Screen, Text, Button, Card, TextField, SelectField, LoadingView,
@@ -49,7 +49,7 @@ export default function CallScreen() {
       const perm = await requestRecordingPermissionsAsync().catch(() => null);
       if (!perm?.granted) return;
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }).catch(() => {});
-      await CallRecording.startForegroundRecording().catch(() => {});
+      // await CallRecording.startForegroundRecording().catch(() => {});
       await recorder.prepareToRecordAsync();
       recorder.record();
       recordingActiveRef.current = true;
@@ -65,7 +65,7 @@ export default function CallScreen() {
       recordingActiveRef.current = false;
       setMicActive(false);
     }
-    await CallRecording.stopForegroundRecording().catch(() => {});
+    // await CallRecording.stopForegroundRecording().catch(() => {});
   };
 
   useEffect(() => {
@@ -111,7 +111,7 @@ export default function CallScreen() {
   useEffect(() => () => {
     if (recordingActiveRef.current) {
       recorder.stop().catch(() => {});
-      CallRecording.stopForegroundRecording().catch(() => {});
+      // CallRecording.stopForegroundRecording().catch(() => {});
     }
   }, []);
 

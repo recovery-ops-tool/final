@@ -8,6 +8,7 @@ import com.recoverpro.server.dto.request.ReassignRequest;
 import com.recoverpro.server.dto.response.*;
 import com.recoverpro.server.enums.AssignmentStatus;
 import com.recoverpro.server.enums.Priority;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.AssignmentService;
 import com.recoverpro.server.service.AllocationService;
@@ -40,12 +41,9 @@ import java.util.UUID;
 @Slf4j
 public class AssignmentController {
 
-    private static final String READERS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER')";
-    private static final String LEADS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
-    private static final String ADMINS =
-            "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')";
+    private static final String READERS = Authz.ALL_STAFF;
+    private static final String LEADS = Authz.LEADS;
+    private static final String ADMINS = Authz.ADMINS;
 
     private static final Map<String, String> SORTABLE_FIELDS = Map.of(
             "assignmentDate", "assignmentDate",
@@ -146,7 +144,8 @@ public class AssignmentController {
             throw new ResourceNotFoundException("Assignments not found");
         }
         Page<AssignmentResponse> result = assignmentService.getAssignmentsByAgentAndDate(
-                agentId, date, PageRequest.of(page, size, Sort.by("sequenceOrder").ascending()));
+                agentId, date, PageRequest.of(page, size,
+                        SafeSort.withIdTiebreaker(Sort.by("sequenceOrder").ascending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(result)));
     }
 

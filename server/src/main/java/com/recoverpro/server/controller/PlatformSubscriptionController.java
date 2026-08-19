@@ -3,6 +3,11 @@ package com.recoverpro.server.controller;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.common.exception.ResourceNotFoundException;
+import com.recoverpro.server.dto.request.ChangePlanRequest;
+import com.recoverpro.server.dto.request.ExtendTrialRequest;
+import com.recoverpro.server.dto.request.GenerateGstLineItemRequest;
+import com.recoverpro.server.dto.request.GrantCompRequest;
+import com.recoverpro.server.dto.request.RefundInvoiceRequest;
 import com.recoverpro.server.dto.response.InvoiceLineItemResponse;
 import com.recoverpro.server.dto.response.InvoiceResponse;
 import com.recoverpro.server.dto.response.PlatformSubscriptionResponse;
@@ -32,6 +37,7 @@ import com.recoverpro.server.service.UserActionAuditService;
 import com.recoverpro.server.service.tax.GstInvoiceLineItemService;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Invoice;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -177,24 +183,13 @@ public class PlatformSubscriptionController {
     public ResponseEntity<ApiResponse<RefundResponse>> refundInvoice(
             @PathVariable UUID orgId,
             @PathVariable UUID invoiceId,
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody RefundInvoiceRequest body,
             @AuthenticationPrincipal UserPrincipal caller) {
 
-        String amountRaw = body.get("amountMinorUnits");
-        if (amountRaw == null || amountRaw.isBlank()) {
-            throw new BusinessException("amountMinorUnits is required");
-        }
-        long amountMinorUnits;
-        try {
-            amountMinorUnits = Long.parseLong(amountRaw);
-        } catch (NumberFormatException e) {
-            throw new BusinessException("amountMinorUnits must be a whole number of minor units");
-        }
-        String reason = body.get("reason");
-
-        Refund refund = refundService.initiateRefund(invoiceId, amountMinorUnits, reason, caller.getId());
+        Refund refund = refundService.initiateRefund(
+                invoiceId, body.getAmountMinorUnits(), body.getReason(), caller.getId());
         log.info("Platform admin {} refunded invoice {} for org {}: amount={}",
-                caller.getId(), invoiceId, orgId, amountMinorUnits);
+                caller.getId(), invoiceId, orgId, body.getAmountMinorUnits());
 
         return ResponseEntity.ok(ApiResponse.success(RefundResponse.builder()
                 .id(refund.getId())
@@ -218,28 +213,13 @@ public class PlatformSubscriptionController {
     public ResponseEntity<ApiResponse<InvoiceLineItemResponse>> generateGstLineItem(
             @PathVariable UUID orgId,
             @PathVariable UUID invoiceId,
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody GenerateGstLineItemRequest body,
             @AuthenticationPrincipal UserPrincipal caller) {
 
-        String description = body.get("description");
-        if (description == null || description.isBlank()) {
-            throw new BusinessException("description is required");
-        }
-        String amountRaw = body.get("taxableAmountMinorUnits");
-        if (amountRaw == null || amountRaw.isBlank()) {
-            throw new BusinessException("taxableAmountMinorUnits is required");
-        }
-        long taxableAmountMinorUnits;
-        try {
-            taxableAmountMinorUnits = Long.parseLong(amountRaw);
-        } catch (NumberFormatException e) {
-            throw new BusinessException("taxableAmountMinorUnits must be a whole number of minor units");
-        }
-
         InvoiceLineItem lineItem = gstInvoiceLineItemService.generate(
-                invoiceId, description, taxableAmountMinorUnits, caller.getId());
+                invoiceId, body.getDescription(), body.getTaxableAmountMinorUnits(), caller.getId());
         log.info("Platform admin {} generated GST line item for invoice {} (org {}): taxable={}",
-                caller.getId(), invoiceId, orgId, taxableAmountMinorUnits);
+                caller.getId(), invoiceId, orgId, body.getTaxableAmountMinorUnits());
 
         return ResponseEntity.ok(ApiResponse.success(InvoiceLineItemResponse.builder()
                 .id(lineItem.getId())
@@ -274,34 +254,24 @@ public class PlatformSubscriptionController {
     @PutMapping("/{orgId}/comp")
     public ResponseEntity<ApiResponse<PlatformSubscriptionResponse>> grantComp(
             @PathVariable UUID orgId,
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody GrantCompRequest body,
             @AuthenticationPrincipal UserPrincipal caller) {
 
         Organization org = orgRepo.findById(orgId)
                 .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + orgId));
 
-        String planName = body.get("plan");
-        if (planName == null || planName.isBlank()) {
-            throw new BusinessException("plan is required");
-        }
         Plan plan;
         try {
-            plan = Plan.valueOf(planName.toUpperCase());
+            plan = Plan.valueOf(body.getPlan().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new BusinessException("Unknown plan: " + planName);
+            throw new BusinessException("Unknown plan: " + body.getPlan());
         }
         if (plan == Plan.NONE) {
             throw new BusinessException("Comping NONE grants nothing. Remove the comp instead.");
         }
 
-        // Required so the next admin who finds this grant can tell why it exists.
-        String reason = body.get("reason");
-        if (reason == null || reason.isBlank()) {
-            throw new BusinessException("reason is required");
-        }
-
         Instant until = null;
-        String untilRaw = body.get("until");
+        String untilRaw = body.getUntil();
         if (untilRaw != null && !untilRaw.isBlank()) {
             try {
                 until = Instant.parse(untilRaw);
@@ -318,7 +288,7 @@ public class PlatformSubscriptionController {
 
         sub.setCompedPlan(plan);
         sub.setCompedUntil(until);
-        sub.setCompedReason(reason.trim());
+        sub.setCompedReason(body.getReason().trim());
         sub.setCompedBy(caller.getId());
         sub.setCompedAt(Instant.now());
         subRepo.save(sub);
@@ -327,18 +297,18 @@ public class PlatformSubscriptionController {
 
         auditLogService.logUserAction(caller.getId(), "ORG_SUBSCRIPTION_COMPED",
                 "orgId=" + orgId + "; plan=" + plan + "; until=" + (until == null ? "open-ended" : until)
-                        + "; reason=" + reason);
+                        + "; reason=" + body.getReason());
         auditService.record(AuditEventRequest.builder()
                 .action(AuditAction.BILLING_OVERRIDE_APPLIED)
                 .resourceType(AuditResourceType.SUBSCRIPTION)
                 .resourceId(orgId.toString())
-                .reason(reason)
+                .reason(body.getReason())
                 .organizationIdOverride(orgId)
                 .afterState(Map.of("compedPlan", plan.name(),
                         "compedUntil", until == null ? "open-ended" : until.toString()))
                 .build());
         log.info("Platform admin {} comped org {} to {} until {} ({})",
-                caller.getId(), orgId, plan, until == null ? "open-ended" : until, reason);
+                caller.getId(), orgId, plan, until == null ? "open-ended" : until, body.getReason());
 
         return ResponseEntity.ok(ApiResponse.success(
                 toResponse(org, sub, Instant.now(), invoiceRepo.sumCollectedByOrg(orgId))));
@@ -474,21 +444,17 @@ public class PlatformSubscriptionController {
     @PutMapping("/{orgId}/plan")
     public ResponseEntity<ApiResponse<PlatformSubscriptionResponse>> changePlan(
             @PathVariable UUID orgId,
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody ChangePlanRequest body,
             @AuthenticationPrincipal UserPrincipal caller) {
 
         Organization org = orgRepo.findById(orgId)
                 .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + orgId));
 
-        String planName = body.get("plan");
-        if (planName == null || planName.isBlank()) {
-            throw new BusinessException("plan is required");
-        }
         Plan plan;
         try {
-            plan = Plan.valueOf(planName.toUpperCase());
+            plan = Plan.valueOf(body.getPlan().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new BusinessException("Unknown plan: " + planName);
+            throw new BusinessException("Unknown plan: " + body.getPlan());
         }
 
         OrgSubscription sub = subRepo.findByOrgId(orgId).orElseGet(() ->
@@ -528,6 +494,54 @@ public class PlatformSubscriptionController {
                 .build());
         log.info("Platform admin {} force-changed org {} plan {} -> {}",
                 caller.getId(), orgId, previousPlan, plan);
+
+        return ResponseEntity.ok(ApiResponse.success(
+                toResponse(org, sub, Instant.now(), invoiceRepo.sumCollectedByOrg(orgId))));
+    }
+
+    /**
+     * SYSTEM 18 TASK 18.2.a: {@code ORG_TRIAL_EXTENDED} existed in the AuditAction taxonomy (V085)
+     * with nothing that ever produced it -- no endpoint could actually extend a trial before this.
+     * Only meaningful for a subscription currently in TRIAL: extending a plan that already
+     * converted (or never started a trial) has no defined effect, so it is rejected rather than
+     * silently no-op'd or reinterpreted.
+     */
+    @PostMapping("/{orgId}/extend-trial")
+    public ResponseEntity<ApiResponse<PlatformSubscriptionResponse>> extendTrial(
+            @PathVariable UUID orgId,
+            @Valid @RequestBody ExtendTrialRequest body,
+            @AuthenticationPrincipal UserPrincipal caller) {
+
+        Organization org = orgRepo.findById(orgId)
+                .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + orgId));
+        OrgSubscription sub = subRepo.findByOrgId(orgId)
+                .orElseThrow(() -> new ResourceNotFoundException("No subscription found for org: " + orgId));
+
+        if (sub.getStatus() != Status.TRIAL) {
+            throw new BusinessException("Only a subscription currently in TRIAL can be extended (status is "
+                    + sub.getStatus() + ")");
+        }
+
+        Instant previousEnd = sub.getTrialEndsAt();
+        Instant base = previousEnd != null && previousEnd.isAfter(Instant.now()) ? previousEnd : Instant.now();
+        Instant newEnd = base.plus(body.getAdditionalDays(), ChronoUnit.DAYS);
+        sub.setTrialEndsAt(newEnd);
+        subRepo.save(sub);
+
+        auditLogService.logUserAction(caller.getId(), "ORG_TRIAL_EXTENDED",
+                "orgId=" + orgId + "; previousEnd=" + previousEnd + "; newEnd=" + newEnd
+                        + "; reason=" + body.getReason());
+        auditService.record(AuditEventRequest.builder()
+                .action(AuditAction.ORG_TRIAL_EXTENDED)
+                .resourceType(AuditResourceType.SUBSCRIPTION)
+                .resourceId(orgId.toString())
+                .organizationIdOverride(orgId)
+                .reason(body.getReason())
+                .beforeState(Map.of("trialEndsAt", String.valueOf(previousEnd)))
+                .afterState(Map.of("trialEndsAt", String.valueOf(newEnd)))
+                .build());
+        log.info("Platform admin {} extended org {} trial by {}d: {} -> {}",
+                caller.getId(), orgId, body.getAdditionalDays(), previousEnd, newEnd);
 
         return ResponseEntity.ok(ApiResponse.success(
                 toResponse(org, sub, Instant.now(), invoiceRepo.sumCollectedByOrg(orgId))));
@@ -584,7 +598,7 @@ public class PlatformSubscriptionController {
     /** Mirror row -> DTO. Same shape as the live-Stripe mapping below, so callers cannot tell them apart. */
     private static InvoiceResponse toInvoiceResponse(PlatformInvoice inv) {
         return InvoiceResponse.builder()
-                .id(inv.getStripeInvoiceId())
+                .id(inv.getProviderInvoiceId())
                 .number(inv.getNumber())
                 .status(inv.getStatus())
                 .amountPaid(inv.getAmountPaid() == null ? 0 : inv.getAmountPaid())

@@ -1,13 +1,15 @@
 import { Tabs } from 'expo-router';
-import { Home, Banknote, Briefcase, Bell, User, ClipboardCheck, IndianRupee, MoreHorizontal } from 'lucide-react-native';
+import { LayoutDashboard, Layers, FolderOpen, Bell, User, ClipboardCheck, Receipt, Menu } from 'lucide-react-native';
 import { useTheme } from '@/theme/useTheme';
 import { useNotificationsBadge } from '@/hooks/useNotificationsBadge';
 import { useAuth } from '@/context/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabsLayout() {
   const { colors } = useTheme();
   const unreadCount = useNotificationsBadge();
   const { role } = useAuth();
+  const insets = useSafeAreaInsets();
 
   // Role-aware tab setup.
   const isFieldRole = role === 'FO' || role === 'CALLER' || role === 'TRACER';
@@ -22,11 +24,11 @@ export default function TabsLayout() {
         tabBarStyle: { 
           backgroundColor: colors.surface, 
           borderTopColor: colors.border,
-          height: 64,
-          paddingBottom: 10,
+          height: 68 + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, 10),
           paddingTop: 8
         },
-        tabBarLabelStyle: { fontFamily: 'Inter_500Medium', fontSize: 11 },
+        tabBarLabelStyle: { fontFamily: 'Inter_500Medium', fontSize: 11, paddingBottom: 4 },
       }}
     >
       {/* 1. Home / Dashboard */}
@@ -34,7 +36,7 @@ export default function TabsLayout() {
         name="index"
         options={{ 
           title: 'Home',
-          tabBarIcon: ({ color, size, focused }) => <Home color={color} fill={focused ? color : 'none'} size={size - 3} /> 
+          tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size - 3} /> 
         }}
       />
 
@@ -43,7 +45,7 @@ export default function TabsLayout() {
         name="cases"
         options={{ 
           title: 'My Cases', 
-          tabBarIcon: ({ color, size }) => <Briefcase color={color} size={size - 3} />,
+          tabBarIcon: ({ color, size }) => <FolderOpen color={color} size={size - 3} />,
           href: isFieldRole ? undefined : null // hide if not field role
         }}
       />
@@ -53,7 +55,7 @@ export default function TabsLayout() {
         name="loans"
         options={{
           title: 'Loans',
-          tabBarIcon: ({ color, size }) => <Banknote color={color} size={size - 3} />,
+          tabBarIcon: ({ color, size }) => <Layers color={color} size={size - 3} />,
           href: isLeadOrAdmin ? undefined : null // hide if not lead/admin
         }}
       />
@@ -63,7 +65,7 @@ export default function TabsLayout() {
         name="collections"
         options={{
           title: 'Collections',
-          tabBarIcon: ({ color, size }) => <IndianRupee color={color} size={size - 3} />,
+          tabBarIcon: ({ color, size }) => <Receipt color={color} size={size - 3} />,
           href: undefined // always shown
         }}
       />
@@ -83,7 +85,7 @@ export default function TabsLayout() {
         name="more"
         options={{
           title: 'More',
-          tabBarIcon: ({ color, size }) => <MoreHorizontal color={color} size={size - 3} />,
+          tabBarIcon: ({ color, size }) => <Menu color={color} size={size - 3} />,
         }}
       />
 

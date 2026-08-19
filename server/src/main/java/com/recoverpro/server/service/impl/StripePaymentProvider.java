@@ -123,6 +123,19 @@ public class StripePaymentProvider implements PaymentProvider {
     }
 
     @Override
+    public java.util.Optional<String> fetchRemoteStatus(UUID orgId) {
+        OrgSubscription sub = subRepo.findByOrgId(orgId).orElse(null);
+        if (sub == null || sub.getStripeSubscriptionId() == null) {
+            return java.util.Optional.empty();
+        }
+        try {
+            return java.util.Optional.ofNullable(Subscription.retrieve(sub.getStripeSubscriptionId()).getStatus());
+        } catch (StripeException e) {
+            throw new PaymentProviderException("Stripe status-fetch error: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
     public RefundResult refundPayment(String providerPaymentRef, Long amountMinorUnits, String reason) {
         // `reason` isn't sent to Stripe: its Reason enum is a fixed dispute-reporting category
         // (duplicate/fraudulent/requested_by_customer), not free text. The human-readable reason

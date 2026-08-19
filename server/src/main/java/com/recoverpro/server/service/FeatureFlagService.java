@@ -1,5 +1,6 @@
 package com.recoverpro.server.service;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.recoverpro.server.common.exception.BusinessException;
 import com.recoverpro.server.config.PlanFeatureMatrix;
 import com.recoverpro.server.entity.FeatureFlag;
@@ -9,6 +10,9 @@ import com.recoverpro.server.enums.AuditActorType;
 import com.recoverpro.server.enums.AuditResourceType;
 import com.recoverpro.server.repository.FeatureFlagRepository;
 import com.recoverpro.server.repository.OrgSubscriptionRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -44,14 +48,47 @@ public class FeatureFlagService {
     private final UserActionAuditService auditLogService;
     private final AuditService auditService;
     private final OrgSubscriptionRepository orgSubscriptionRepository;
+    private final MeterRegistry meterRegistry;
+
+    /**
+     * TASK 15.3: {@code isEnabled} is on the request hot path (every {@code @RequiresFeature} check)
+     * and, unlike {@code userDetails}/{@code lucienContext}/{@code systemPrompts}, isn't behind
+     * Spring's cache abstraction at all -- it's hand-rolled against Redis (a deliberate SYSTEM 20
+     * TASK 20.3 choice; see the field javadoc there). That means it gets none of Caffeine's atomic
+     * get-or-compute for free. This is a small in-process single-flight layer in front of the same
+     * Redis-then-DB resolution: concurrent callers for the same cold org+flagKey collapse onto one
+     * computation via Caffeine's per-key atomicity, instead of each independently missing Redis and
+     * hitting the DB. It is NOT a second source of truth for staleness -- {@link #evictCache} clears
+     * this alongside the Redis key on every write, so nothing here outlives the write that
+     * invalidated it. The 5s expiry is only a safety bound, not the correctness mechanism.
+     *
+     * <p>Keyed on organizationId+flagKey only (not {@code defaultIfMissing}): the sole caller,
+     * {@code EntitlementServiceImpl.hasFeature()}, always passes {@code false}, so a single default
+     * per key is safe in practice. A future caller passing a different default for the same key
+     * would need this reworked.
+     */
+    private com.github.benmanes.caffeine.cache.Cache<String, Boolean> stampedeGuard;
+
+    @PostConstruct
+    void initStampedeGuard() {
+        stampedeGuard = Caffeine.newBuilder()
+                .maximumSize(10_000)
+                .expireAfterWrite(Duration.ofSeconds(5))
+                .recordStats()
+                .build();
+        CaffeineCacheMetrics.monitor(meterRegistry, stampedeGuard, "featureFlagResolution");
+    }
 
     public boolean isEnabled(UUID organizationId, String flagKey, boolean defaultIfMissing) {
         if (flagKey == null || flagKey.isBlank()) return defaultIfMissing;
-        Boolean cached = readCached(organizationId, flagKey);
-        if (cached != null) return cached;
-        boolean resolved = resolveFromDb(organizationId, flagKey, defaultIfMissing);
-        writeCached(organizationId, flagKey, resolved);
-        return resolved;
+        Boolean resolved = stampedeGuard.get(cacheKey(organizationId, flagKey), k -> {
+            Boolean cached = readCached(organizationId, flagKey);
+            if (cached != null) return cached;
+            boolean fromDb = resolveFromDb(organizationId, flagKey, defaultIfMissing);
+            writeCached(organizationId, flagKey, fromDb);
+            return fromDb;
+        });
+        return resolved != null ? resolved : defaultIfMissing;
     }
 
     /**
@@ -295,6 +332,7 @@ public class FeatureFlagService {
     }
 
     private void evictCache(UUID organizationId, String flagKey) {
+        stampedeGuard.invalidate(cacheKey(organizationId, flagKey));
         try {
             redis.delete(cacheKey(organizationId, flagKey));
         } catch (Exception e) {

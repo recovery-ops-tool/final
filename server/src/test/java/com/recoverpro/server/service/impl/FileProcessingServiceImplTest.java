@@ -16,6 +16,7 @@ import com.recoverpro.server.service.FileParsingService;
 import com.recoverpro.server.service.FileStorageService;
 import com.recoverpro.server.service.NotificationService;
 import com.recoverpro.server.service.importer.EntityImportProcessor;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
@@ -57,14 +59,16 @@ class FileProcessingServiceImplTest {
     @Mock private EntityImportProcessor<Object> allocationProcessor;
 
     private FileProcessingServiceImpl service;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         service = new FileProcessingServiceImpl(fileUploadRepository, allocationRepository,
                 columnSchemaRepository, fileProcessingErrorRepository, organizationRepository,
                 userRepository, fileParsingService, fileStorageService,
                 fileUploadPostProcessingService, notificationService, auditService, entitlementService,
-                List.of(allocationProcessor));
+                List.of(allocationProcessor), meterRegistry);
         lenient().when(entitlementService.canCreateAllocations(any(), anyLong())).thenReturn(true);
     }
 
@@ -100,5 +104,15 @@ class FileProcessingServiceImplTest {
 
         verify(fileUploadPostProcessingService).autoAssignFromFile(fileUploadId, orgId, uploadedBy);
         verify(fileUploadPostProcessingService).cancelDroppedLoanAssignments(fileUploadId, orgId);
+
+        // SYSTEM 12 TASK 12.2: proves file_import_events_total actually appears in the registry
+        // (the same registry /actuator/prometheus reads from) after exercising the code path --
+        // the task's own literal acceptance criterion, not just that the code compiles.
+        assertThat(meterRegistry.get("file_import_events_total")
+                .tag("upload_type", "ALLOCATION").tag("outcome", "started")
+                .counter().count()).isEqualTo(1.0);
+        assertThat(meterRegistry.get("file_import_events_total")
+                .tag("upload_type", "ALLOCATION").tag("outcome", "completed")
+                .counter().count()).isEqualTo(1.0);
     }
 }

@@ -4,10 +4,12 @@ import java.util.UUID;
 
 import com.recoverpro.server.dto.request.CapacityConfigRequest;
 import com.recoverpro.server.dto.request.HolidayRequest;
+import com.recoverpro.server.common.SafeSort;
 import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.entity.AgentCapacityConfig;
 import com.recoverpro.server.entity.HolidayCalendar;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.service.CalendarService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,8 +31,8 @@ import java.time.LocalDate;
 @Slf4j
 public class CalendarController {
 
-    private static final String READERS = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
-    private static final String ADMINS = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN')";
+    private static final String READERS = Authz.LEADS;
+    private static final String ADMINS = Authz.ADMINS;
 
     private final CalendarService calendarService;
 
@@ -57,7 +59,7 @@ public class CalendarController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Page<HolidayCalendar> holidays = calendarService.getHolidays(orgId,
-                PageRequest.of(page, size, Sort.by("holidayDate").ascending()));
+                PageRequest.of(page, size, SafeSort.withIdTiebreaker(Sort.by("holidayDate").ascending())));
         return ResponseEntity.ok(ApiResponse.success(PagedResponse.from(holidays)));
     }
 

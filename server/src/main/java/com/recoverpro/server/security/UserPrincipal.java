@@ -20,16 +20,26 @@ public class UserPrincipal implements UserDetails {
     private final boolean enabled;
     private final boolean accountLocked;
     private final UUID organizationId;
+    private final boolean organizationActive;
     private final Collection<? extends GrantedAuthority> authorities;
 
+    /** Defaults organizationActive to true -- callers that build a UserPrincipal outside the
+     *  request-authentication path (token minting, tests) have no suspension concern of their
+     *  own; {@link com.recoverpro.server.security.CustomUserDetailsService}, the one path that
+     *  actually gates access on it, uses the other constructor. */
     public UserPrincipal(User user) {
-        this.id             = user.getId();
-        this.email          = user.getEmail();
-        this.passwordHash   = user.getPasswordHash();
-        this.enabled        = user.isEnabled();
-        this.accountLocked  = user.isCurrentlyLocked();
-        this.organizationId = user.getOrganizationId();
-        this.authorities    = buildAuthorities(user);
+        this(user, true);
+    }
+
+    public UserPrincipal(User user, boolean organizationActive) {
+        this.id                 = user.getId();
+        this.email              = user.getEmail();
+        this.passwordHash       = user.getPasswordHash();
+        this.enabled            = user.isEnabled();
+        this.accountLocked      = user.isCurrentlyLocked();
+        this.organizationId     = user.getOrganizationId();
+        this.organizationActive = organizationActive;
+        this.authorities        = buildAuthorities(user);
     }
 
     private static Set<GrantedAuthority> buildAuthorities(User user) {

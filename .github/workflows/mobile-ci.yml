@@ -26,3 +26,11 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run lint
+      # SYSTEM 06 TASK 6.3.a: 14 pre-existing HIGH findings as of 2026-08-18, almost all
+      # transitive noise within Expo's own Metro/react-native-reanimated toolchain
+      # (metro-config, react-native-worklets, etc.) -- `npm audit fix --force` would downgrade
+      # across Expo's pinned SDK compatibility matrix, a real risk not worth taking blindly
+      # just to silence this check. Non-blocking until a dedicated triage pass (or an Expo SDK
+      # upgrade that carries the fixes with it) addresses these individually.
+      - run: npm audit --audit-level=high
+        continue-on-error: true

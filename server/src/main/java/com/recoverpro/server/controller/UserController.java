@@ -5,9 +5,11 @@ import com.recoverpro.server.common.dto.response.ApiResponse;
 import com.recoverpro.server.common.dto.response.PagedResponse;
 import com.recoverpro.server.dto.request.AssignRoleRequest;
 import com.recoverpro.server.dto.request.CreateUserRequest;
+import com.recoverpro.server.dto.request.EraseUserRequest;
 import com.recoverpro.server.dto.request.UpdateUserRequest;
 import com.recoverpro.server.dto.response.UserPermissionsResponse;
 import com.recoverpro.server.dto.response.UserResponse;
+import com.recoverpro.server.security.Authz;
 import com.recoverpro.server.security.UserPrincipal;
 import com.recoverpro.server.service.UserService;
 import jakarta.validation.Valid;
@@ -29,9 +31,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserController {
 
-    private static final String ADMIN_ROLES = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
+    private static final String ADMIN_ROLES = Authz.LEADS;
     // Daily Dispatch and Field Agents (Manager/TL) both need to list field officers by role.
-    private static final String LEADS_ROLES = "hasAnyRole('PLATFORM_ADMIN','ORG_ADMIN','MANAGER','TL')";
+    private static final String LEADS_ROLES = Authz.LEADS;
     // A custom role granted USER_CREATE/USER_DELETE via Role Management should be able to use
     // these endpoints even without ORG_ADMIN/PLATFORM_ADMIN — UserPrincipal already flattens
     // granted role permissions into plain (non-ROLE_-prefixed) authorities at login.
@@ -58,7 +60,10 @@ public class UserController {
                 userService.listUsersByRole(callerOrg(principal), normalized)));
     }
 
+    // SYSTEM 09 TASK 9.2: makes the pre-existing filter-chain authentication requirement
+    // explicit -- self-service, principal.getId() throughout.
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<UserResponse>> getMyProfile(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(userService.getCurrentUser(principal.getId())));
@@ -154,6 +159,47 @@ public class UserController {
             @PathVariable UUID id) {
         userService.deleteUser(callerOrg(principal), id);
         return ResponseEntity.ok(ApiResponse.of("User deleted", null));
+    }
+
+    // SYSTEM 18 TASK 18.3: pending-invite lifecycle -- a "pending invite" is a created-but-never-
+    // logged-in user (see UserServiceImpl#requirePendingInvite for why lastLoginAt, not
+    // passwordChangedAt, is the reliable signal).
+    @GetMapping("/pending-invites")
+    @PreAuthorize(ADMIN_ROLES)
+    public ResponseEntity<ApiResponse<List<UserResponse>>> listPendingInvites(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(userService.listPendingInvites(callerOrg(principal))));
+    }
+
+    @PostMapping("/{id}/invite/resend")
+    @PreAuthorize(ADMIN_ROLES)
+    public ResponseEntity<ApiResponse<Void>> resendInvite(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id) {
+        userService.resendInvite(callerOrg(principal), id);
+        return ResponseEntity.ok(ApiResponse.of("Invite resent", null));
+    }
+
+    @DeleteMapping("/{id}/invite")
+    @PreAuthorize(ADMIN_ROLES)
+    public ResponseEntity<ApiResponse<Void>> revokeInvite(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id) {
+        userService.revokeInvite(callerOrg(principal), id);
+        return ResponseEntity.ok(ApiResponse.of("Invite revoked", null));
+    }
+
+    // SYSTEM 18 TASK 18.4: GDPR erasure. Gated tighter than ordinary user management
+    // (Authz.ADMINS, not ADMIN_ROLES/Authz.LEADS) -- a MANAGER/TL can deactivate or delete a
+    // teammate's account, but an irreversible cross-table PII erasure is an admin-only call.
+    @PostMapping("/{id}/erase")
+    @PreAuthorize(Authz.ADMINS)
+    public ResponseEntity<ApiResponse<Void>> eraseUser(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id,
+            @Valid @RequestBody EraseUserRequest request) {
+        userService.eraseUserData(callerOrg(principal), id, request.getReason());
+        return ResponseEntity.ok(ApiResponse.of("User data erased", null));
     }
 
     @GetMapping("/{id}/permissions")

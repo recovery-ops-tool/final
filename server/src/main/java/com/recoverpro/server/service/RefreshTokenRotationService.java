@@ -32,4 +32,11 @@ public interface RefreshTokenRotationService {
 
     /** Revokes one specific session by id. Throws if it doesn't belong to userId. */
     void revokeSession(UUID userId, UUID sessionId);
+
+    /** SYSTEM 08 TASK 8.2.c: revokes every OTHER session, leaving the caller's own current one
+     *  (identified by currentDeviceId, from X-Device-Id) intact. If currentDeviceId is null (the
+     *  caller sent no device id, so "current" can't be identified), falls back to revoking
+     *  everything -- the same as {@link #logoutAllDevices}, since there is no session to spare.
+     *  Returns the number of sessions revoked. */
+    int revokeOtherSessions(UUID userId, String currentDeviceId);
 }

@@ -101,7 +101,16 @@ public class CallingHoursGuard {
                 try {
                     holiday = holidayCalendarRepository
                             .existsByOrganizationIdAndHolidayDateAndIsActiveTrue(organizationId, z.toLocalDate());
-                } catch (Exception ignored) { }
+                } catch (Exception e) {
+                    // SYSTEM 13 TASK 13.2: was silent and defaulted to holiday=false (permissive --
+                    // treats an unverifiable day as safe to call), inconsistent with isAllowedFor's
+                    // fail-closed default for this exact same lookup a few lines up. Fail closed
+                    // here too: treat an unverifiable day as a holiday (skip it, try the next one)
+                    // rather than risk scheduling a call on what might actually be a holiday.
+                    log.warn("Holiday lookup failed for org={} date={}, treating as holiday (fail-closed): {}",
+                            organizationId, z.toLocalDate(), e.getMessage());
+                    holiday = true;
+                }
             }
             if (dowOk && !holiday) return z.toInstant();
             z = z.plusDays(1).withHour(startHour).withMinute(0).withSecond(0).withNano(0);
