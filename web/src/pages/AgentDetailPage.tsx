@@ -5,7 +5,7 @@ import axiosInstance from '../api/axiosInstance';
 import { useAuth } from '../AuthContext';
 import {
   ArrowLeft, Mail, Calendar, CheckCircle2, Clock,
-  Target, Activity, AlertCircle, IndianRupee, Briefcase, MapPin, X
+  Target, Activity, AlertCircle, IndianRupee, Briefcase, MapPin, X, User
 } from 'lucide-react';
 import type { UserResponse, VisitLogResponse } from '../types';
 import { type AgentPerf, type CollectionReport, DispPill } from './AgentDetailHelpers';
