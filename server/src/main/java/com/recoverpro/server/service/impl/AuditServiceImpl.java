@@ -32,7 +32,7 @@ public class AuditServiceImpl implements AuditService {
     private final AuditEventRepository auditEventRepository;
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void record(AuditEventRequest request) {
         UserPrincipal principal = currentPrincipal();
 
