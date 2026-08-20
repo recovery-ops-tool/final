@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Loader2, Users, UserCheck, Search, X } from 'lucide-react';
+import { CheckCircle2, Loader2, Users, UserCheck, Search, X, User } from 'lucide-react';
 import type { UserResponse, AllocationResponse } from '../types';
 import { hashColor } from '../utils/navConfig';
 import { DonutCard } from './DashboardShared';
@@ -193,7 +193,7 @@ export default function DispatchAgentPanel(p: Props) {
                   className="dd-fo-avatar"
                   style={{ background: hashColor(`${a.firstName}${a.lastName}`), color: 'var(--text-on-solid)', border: 'none' }}
                 >
-                  {p.initials(a)}
+                  {p.initials(a) || <User size={14} />}
                 </span>
                 <span className="dd-agent-row-name">
                   {`${a.firstName} ${a.lastName}`.trim()}

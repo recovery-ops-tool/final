@@ -4,7 +4,7 @@ import type { CSSProperties, MouseEvent as RMouseEvent } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 // Submenu icons now come from navConfig via item.children, so the sidebar no
 // longer imports one icon per hardcoded sub-link.
-import { Lock, LogOut, PanelLeft, ChevronDown } from 'lucide-react';
+import { Lock, LogOut, PanelLeft, ChevronDown, User } from 'lucide-react';
 import { Logo } from './Logo';
 import { prefetchRoute } from '../utils/routePrefetch';
 import { useT } from '../utils/i18n';
@@ -37,7 +37,7 @@ function initials(user?: { firstName?: string; lastName?: string; email?: string
   if (user?.firstName && user?.lastName) return (user.firstName[0] + user.lastName[0]).toUpperCase();
   if (user?.firstName) return user.firstName.slice(0, 2).toUpperCase();
   if (user?.email) return user.email[0].toUpperCase();
-  return '?';
+  return null;
 }
 
 export default function AppSidebar({
@@ -307,12 +307,12 @@ export default function AppSidebar({
             onMouseEnter={e => showTip(e, displayName)}
             onMouseLeave={hideTip}
           >
-            <span className="asb-avatar" style={{ background: avatarColor }}>{initials(user)}</span>
+            <span className="asb-avatar" style={{ background: avatarColor }}>{initials(user) || <User size={14} />}</span>
           </div>
         ) : (
           <div className="asb-footer-pill">
             <span className="asb-avatar-wrap">
-              <span className="asb-avatar" style={{ background: avatarColor }}>{initials(user)}</span>
+              <span className="asb-avatar" style={{ background: avatarColor }}>{initials(user) || <User size={14} />}</span>
             </span>
             <div className="asb-footer-identity">
               <span className="asb-footer-name" title={displayName}>{displayName}</span>

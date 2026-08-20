@@ -33,6 +33,10 @@ export const authApi = {
     await axiosInstance.post('/api/v1/auth/reset-password', data);
   },
 
+  changePassword: async (data: { currentPassword: string; newPassword: string }): Promise<void> => {
+    await axiosInstance.post('/api/v1/auth/change-password', data);
+  },
+
   setupMfa: async (): Promise<any> => {
     const response = await axiosInstance.post('/api/v1/auth/mfa/setup');
     return response.data.data;

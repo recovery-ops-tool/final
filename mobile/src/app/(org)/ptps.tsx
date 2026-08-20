@@ -1,7 +1,7 @@
-import React, { useCallback, useState } from 'react';
-import { FlatList, View, StyleSheet, Modal, Pressable, ScrollView, SafeAreaView, TextInput } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { TrendingUp, WifiOff, X, AlertTriangle, Clock, Calendar, User, FileText, CheckCircle2, Search, SlidersHorizontal, Download } from 'lucide-react-native';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
+import { FlatList, View, StyleSheet, Modal, Pressable, ScrollView, SafeAreaView, TextInput, Animated, Dimensions } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { TrendingUp, WifiOff, X, AlertTriangle, Clock, Calendar, User, FileText, CheckCircle2, Search, SlidersHorizontal, Download, ChevronLeft } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/theme/useTheme';
 import { Screen, Text, Card, Badge, EmptyState, LoadingView, Divider, Button } from '@/components/ui';
@@ -9,6 +9,8 @@ import { ptpsApi } from '@/api/ptpsApi';
 import { formatCurrency } from '@/utils/allocationHeuristics';
 import { formatDate, formatDateTime } from '@/utils/date';
 import type { PtpResponse } from '@/types/domain';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function PtpListScreen() {
   const { user } = useAuth();
@@ -20,7 +22,27 @@ export default function PtpListScreen() {
   const [loadError, setLoadError] = useState(false);
   
   const [selectedPtp, setSelectedPtp] = useState<PtpResponse | null>(null);
-  
+  const [detailVisible, setDetailVisible] = useState(false);
+  const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+
+  useEffect(() => {
+    if (selectedPtp) {
+      setDetailVisible(true);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: SCREEN_WIDTH,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => setDetailVisible(false));
+    }
+  }, [selectedPtp]);
+
   const [showExportModal, setShowExportModal] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   
@@ -103,10 +125,15 @@ export default function PtpListScreen() {
   return (
     <Screen edges={['top']}>
       <View style={{ gap: spacing.s4, paddingBottom: spacing.s4 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1 }}>
-            <Text variant="title">Promises to Pay</Text>
-            <Text variant="caption" color="secondary">{filteredPtps.length} active promises</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3, flex: 1 }}>
+            <Pressable onPress={() => router.back()} hitSlop={8}>
+              <ChevronLeft size={24} color={colors.ink1} />
+            </Pressable>
+            <View>
+              <Text variant="title">Promises to Pay</Text>
+              <Text variant="caption" color="secondary">{filteredPtps.length} active promises</Text>
+            </View>
           </View>
           <View style={{ flexDirection: 'row', gap: spacing.s3, alignItems: 'center' }}>
             <Pressable 
@@ -174,28 +201,26 @@ export default function PtpListScreen() {
         />
       </View>
 
-      {/* PTP Details Modal */}
-      <Modal visible={!!selectedPtp} animationType="slide" transparent>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: colors.canvas, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, maxHeight: '90%', flex: 1 }}>
-            
+      {/* PTP Details — full-screen slide from right */}
+      <Modal visible={detailVisible} animationType="none" transparent statusBarTranslucent>
+        <Animated.View style={{ flex: 1, backgroundColor: colors.canvas, transform: [{ translateX: slideAnim }] }}>
+          <SafeAreaView style={{ flex: 1 }}>
             {/* Header */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: spacing.s4, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-              <View style={{ flex: 1 }}>
-                <Text variant="title">{selectedPtp?.borrowerName}</Text>
-                <Text variant="caption" color="secondary" style={{ marginTop: 2 }}>Loan #{selectedPtp?.loanNumber}</Text>
-                <Text variant="caption" color="tertiary" style={{ marginTop: 2 }}>{selectedPtp?.agentName} · {formatDate(selectedPtp?.createdAt || '')}</Text>
-              </View>
-              <Pressable onPress={() => setSelectedPtp(null)} style={{ padding: 4 }}>
-                <X size={20} color={colors.ink2} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3, padding: spacing.s4, paddingTop: 48, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              <Pressable onPress={() => setSelectedPtp(null)} hitSlop={8}>
+                <ChevronLeft size={24} color={colors.ink1} />
               </Pressable>
+              <View style={{ flex: 1 }}>
+                <Text variant="headline">{selectedPtp?.borrowerName}</Text>
+                <Text variant="caption" color="secondary">Loan #{selectedPtp?.loanNumber}</Text>
+              </View>
+              <Badge tone={getPtpBadgeTone(selectedPtp?.status || '')} label={(selectedPtp?.status || '').replace('_', ' ')} />
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: spacing.s4, gap: spacing.s6 }}>
-              
-              {/* Pills */}
+            <ScrollView contentContainerStyle={{ padding: spacing.s4, gap: spacing.s5, paddingBottom: 40 }}>
+
+              {/* Overdue / Reminder pills */}
               <View style={{ flexDirection: 'row', gap: spacing.s2, flexWrap: 'wrap' }}>
-                <Badge tone={getPtpBadgeTone(selectedPtp?.status || '')} label={(selectedPtp?.status || '').replace('_', ' ')} />
                 {selectedPtp?.status === 'PENDING' && new Date(selectedPtp.promisedDate) < new Date() && (
                   <Badge tone="error" label="Overdue" />
                 )}
@@ -205,31 +230,27 @@ export default function PtpListScreen() {
               </View>
 
               {/* Stat Grid */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s4 }}>
-                <View style={{ flexBasis: '45%' }}>
-                  <Text variant="caption" color="secondary">Promised</Text>
-                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>{formatCurrency(selectedPtp?.promisedAmount || 0)}</Text>
-                </View>
-                <View style={{ flexBasis: '45%' }}>
-                  <Text variant="caption" color="secondary">Collected</Text>
-                  <Text variant="bodyMedium" style={{ fontWeight: '600', color: (selectedPtp?.collectedAmount || 0) > 0 ? colors.accent : colors.ink1 }}>{formatCurrency(selectedPtp?.collectedAmount || 0)}</Text>
-                </View>
-                <View style={{ flexBasis: '45%' }}>
-                  <Text variant="caption" color="secondary">Promised date</Text>
-                  <Text variant="bodyMedium" style={{ fontWeight: '600', color: (selectedPtp?.status === 'PENDING' && new Date(selectedPtp.promisedDate) < new Date()) ? colors.error : colors.ink1 }}>{formatDate(selectedPtp?.promisedDate || '')}</Text>
-                </View>
-                <View style={{ flexBasis: '45%' }}>
-                  <Text variant="caption" color="secondary">Fulfillment</Text>
-                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>{selectedPtp?.fulfillmentPercentage?.toFixed(0) || '0'}%</Text>
-                </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s3 }}>
+                {[
+                  { label: 'Promised', value: formatCurrency(selectedPtp?.promisedAmount || 0), color: colors.ink1 },
+                  { label: 'Collected', value: formatCurrency(selectedPtp?.collectedAmount || 0), color: (selectedPtp?.collectedAmount || 0) > 0 ? colors.accent : colors.ink1 },
+                  { label: 'Promised Date', value: formatDate(selectedPtp?.promisedDate || ''), color: (selectedPtp?.status === 'PENDING' && new Date(selectedPtp!.promisedDate) < new Date()) ? colors.error : colors.ink1 },
+                  { label: 'Fulfillment', value: `${selectedPtp?.fulfillmentPercentage?.toFixed(0) || '0'}%`, color: colors.ink1 },
+                ].map(({ label, value, color }) => (
+                  <View key={label} style={{ flexBasis: '47%', backgroundColor: colors.subtle, borderRadius: radius.md, padding: spacing.s3 }}>
+                    <Text variant="caption" color="secondary">{label}</Text>
+                    <Text variant="bodyMedium" style={{ fontWeight: '700', color, marginTop: 2 }}>{value}</Text>
+                  </View>
+                ))}
               </View>
 
               {/* Loan Info */}
-              <View style={{ gap: spacing.s2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.s4, gap: spacing.s3 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <FileText size={14} color={colors.ink2} />
-                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Loan information</Text>
+                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Loan Information</Text>
                 </View>
+                <Divider />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text variant="caption" color="secondary">Borrower</Text>
                   <Text variant="caption" style={{ fontWeight: '500' }}>{selectedPtp?.borrowerName}</Text>
@@ -241,23 +262,25 @@ export default function PtpListScreen() {
               </View>
 
               {/* Agent */}
-              <View style={{ gap: spacing.s2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.s4, gap: spacing.s3 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <User size={14} color={colors.ink2} />
                   <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Agent</Text>
                 </View>
+                <Divider />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text variant="caption" color="secondary">Name</Text>
                   <Text variant="caption" style={{ fontWeight: '500' }}>{selectedPtp?.agentName}</Text>
                 </View>
               </View>
 
-              {/* Promise details */}
-              <View style={{ gap: spacing.s2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              {/* Promise Details */}
+              <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.s4, gap: spacing.s3 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <FileText size={14} color={colors.ink2} />
-                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Promise details</Text>
+                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Promise Details</Text>
                 </View>
+                <Divider />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text variant="caption" color="secondary">Promised amount</Text>
                   <Text variant="caption" style={{ fontWeight: '600' }}>{formatCurrency(selectedPtp?.promisedAmount || 0)}</Text>
@@ -273,17 +296,17 @@ export default function PtpListScreen() {
                 {selectedPtp?.contactNotes && (
                   <View style={{ gap: 4, marginTop: 4 }}>
                     <Text variant="caption" color="secondary">Contact notes</Text>
-                    <Text variant="caption" style={{ fontWeight: '400' }}>{selectedPtp?.contactNotes}</Text>
+                    <Text variant="caption">{selectedPtp.contactNotes}</Text>
                   </View>
                 )}
               </View>
 
-              {/* Reasons */}
+              {/* Broken / Cancelled Reason */}
               {(selectedPtp?.brokenReason || selectedPtp?.cancellationReason) && (
-                <View style={{ gap: spacing.s2 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <View style={{ backgroundColor: '#FEF2F2', borderRadius: radius.md, padding: spacing.s4, gap: spacing.s3, borderWidth: 1, borderColor: '#FECACA' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <AlertTriangle size={14} color={colors.error} />
-                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Reason</Text>
+                    <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.error }}>Reason</Text>
                   </View>
                   {selectedPtp?.brokenReason && (
                     <View style={{ gap: 4 }}>
@@ -294,18 +317,19 @@ export default function PtpListScreen() {
                   {selectedPtp?.cancellationReason && (
                     <View style={{ gap: 4 }}>
                       <Text variant="caption" color="secondary">Cancellation reason</Text>
-                      <Text variant="caption" style={{ fontWeight: '400' }}>{selectedPtp.cancellationReason}</Text>
+                      <Text variant="caption">{selectedPtp.cancellationReason}</Text>
                     </View>
                   )}
                 </View>
               )}
 
               {/* Timeline */}
-              <View style={{ gap: spacing.s2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.s4, gap: spacing.s3 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Calendar size={14} color={colors.ink2} />
                   <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Timeline</Text>
                 </View>
+                <Divider />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text variant="caption" color="secondary">Created</Text>
                   <Text variant="caption" style={{ fontWeight: '500' }}>{formatDateTime(selectedPtp?.createdAt || '')}</Text>
@@ -331,13 +355,8 @@ export default function PtpListScreen() {
               </View>
 
             </ScrollView>
-            
-            <View style={{ padding: spacing.s4, borderTopWidth: 1, borderTopColor: colors.border }}>
-              <Button label="Done" onPress={() => setSelectedPtp(null)} />
-            </View>
-            <SafeAreaView />
-          </View>
-        </View>
+          </SafeAreaView>
+        </Animated.View>
       </Modal>
 
       {/* Export Options Modal */}

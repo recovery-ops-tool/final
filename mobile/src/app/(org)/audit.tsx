@@ -213,7 +213,7 @@ function ActivityFeed({
           flexDirection: 'row', alignItems: 'center', gap: spacing.s2,
           backgroundColor: colors.subtle, borderRadius: radius.md,
           paddingHorizontal: spacing.s3,
-          borderWidth: 1, borderColor: colors.border,
+          borderWidth: 1, borderColor: colors.border, marginBottom: spacing.s2
         }}>
           <Search size={16} color={colors.ink3} />
           <TextInput
@@ -619,17 +619,14 @@ export default function AuditLogsScreen() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <Screen edges={['top']}>
+    <Screen scroll={false} padded={false} edges={['top']}>
       <View style={{ flex: 1, gap: spacing.s4 }}>
 
         {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View>
-            <Text variant="title">Audit Logs</Text>
-            <Text variant="caption" color="secondary">
-              {logs.length} system events recorded
-            </Text>
-          </View>
+          <View style={{ marginTop: -8 }}>
+          <Text style={{ fontSize: 13, fontWeight: '400', color: colors.ink3, fontFamily: 'Inter_400Regular' }}>Audit logs</Text>
+        </View>
         </View>
 
         {/* Tabs — only show for PLATFORM_ADMIN */}

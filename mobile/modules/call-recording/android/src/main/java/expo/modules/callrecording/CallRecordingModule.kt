@@ -10,6 +10,24 @@ class CallRecordingModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("CallRecording")
 
+        Events("onPauseRequested", "onResumeRequested", "onStopRequested")
+
+        OnCreate {
+            CallRecordingService.listener = { action ->
+                val eventName = when (action) {
+                    CallRecordingService.ACTION_PAUSE -> "onPauseRequested"
+                    CallRecordingService.ACTION_RESUME -> "onResumeRequested"
+                    CallRecordingService.ACTION_STOP -> "onStopRequested"
+                    else -> null
+                }
+                eventName?.let { sendEvent(it) }
+            }
+        }
+
+        OnDestroy {
+            CallRecordingService.listener = null
+        }
+
         AsyncFunction<Unit>("startForegroundRecording") {
             val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
             val intent = Intent(context, CallRecordingService::class.java)

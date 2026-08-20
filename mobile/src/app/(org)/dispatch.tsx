@@ -84,8 +84,8 @@ export default function DailyDispatchScreen() {
   if (loading && dispatched.length === 0) return <LoadingView label="Loading daily dispatch…" />;
 
   return (
-    <Screen edges={['top']}>
-      <View style={{ gap: spacing.s4, paddingBottom: spacing.s4 }}>
+    <Screen scroll={false} padded={false} edges={['top']}>
+      <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s2, gap: spacing.s4 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1, paddingRight: spacing.s2 }}>
             <Text variant="title">Daily Dispatch</Text>
@@ -115,7 +115,7 @@ export default function DailyDispatchScreen() {
                 showsHorizontalScrollIndicator={false}
                 data={fos}
                 keyExtractor={f => f.id}
-                contentContainerStyle={{ gap: spacing.s2 }}
+                contentContainerStyle={{ paddingHorizontal: spacing.s4, paddingBottom: spacing.s8, gap: spacing.s2 }}
                 renderItem={({ item }) => (
                   <Pressable
                     onPress={() => {
@@ -143,7 +143,7 @@ export default function DailyDispatchScreen() {
         <View style={{
           flexDirection: 'row', alignItems: 'center', gap: spacing.s2,
           backgroundColor: colors.subtle, borderRadius: radius.md, paddingHorizontal: spacing.s3,
-          borderWidth: 1, borderColor: colors.border,
+          borderWidth: 1, borderColor: colors.border, marginBottom: spacing.s2
         }}
         >
           <Search size={16} color={colors.ink3} />
@@ -164,7 +164,7 @@ export default function DailyDispatchScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ gap: spacing.s3 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.s4, paddingBottom: spacing.s8, gap: spacing.s3 }}
           renderItem={({ item }) => (
             <Card style={{ padding: spacing.s4, gap: spacing.s2 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -184,7 +184,6 @@ export default function DailyDispatchScreen() {
           )}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          scrollEnabled={false}
           ListEmptyComponent={
             loadError ? (
               <EmptyState icon={WifiOff} title="Couldn't load dispatch" message="Pull down to try again." />

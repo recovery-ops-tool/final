@@ -52,17 +52,16 @@ export default function TeamAttendanceScreen() {
   if (loading) return <LoadingView label="Loading team attendance..." />;
 
   return (
-    <Screen edges={['top']}>
-      <View style={{ gap: spacing.s4, paddingBottom: spacing.s4 }}>
-        <View>
-          <Text variant="title">Team Attendance</Text>
-          <Text variant="caption" color="secondary">{records.length} checked-in officers today</Text>
+    <Screen scroll={false} padded={false} edges={['top']}>
+      <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s2, gap: spacing.s4 }}>
+        <View style={{ marginTop: -8 }}>
+          <Text style={{ fontSize: 13, fontWeight: '400', color: colors.ink3, fontFamily: 'Inter_400Regular' }}>Team attendance</Text>
         </View>
 
         <View style={{
           flexDirection: 'row', alignItems: 'center', gap: spacing.s2,
           backgroundColor: colors.subtle, borderRadius: radius.md, paddingHorizontal: spacing.s3,
-          borderWidth: 1, borderColor: colors.border,
+          borderWidth: 1, borderColor: colors.border, marginBottom: spacing.s2
         }}
         >
           <Search size={16} color={colors.ink3} />
@@ -83,7 +82,7 @@ export default function TeamAttendanceScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ gap: spacing.s3 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.s4, paddingBottom: spacing.s8, gap: spacing.s3 }}
           renderItem={({ item }) => {
             const time = new Date(item.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             return (
@@ -108,7 +107,6 @@ export default function TeamAttendanceScreen() {
           }}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          scrollEnabled={false}
           ListEmptyComponent={
             loadError ? (
               <EmptyState icon={WifiOff} title="Couldn't load log" message="Pull down to try again." />

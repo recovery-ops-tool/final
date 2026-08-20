@@ -232,7 +232,7 @@ export default function ForgotPasswordPage() {
                 <header className="form-header">
                   <p className="rp-step-label">Account recovery · Step 2 of 3</p>
                   <div className="mfa-icon-row">
-                    <div className="mfa-icon-badge"><ShieldCheck size={20} /></div>
+                    <div className="mfa-icon-badge"><KeyRound size={20} /></div>
                     <h2 className="form-title">Enter the reset code</h2>
                   </div>
                   <p className="form-sub">

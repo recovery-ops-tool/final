@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, User } from 'lucide-react';
 
 interface Props {
   user: { firstName?: string; lastName?: string; email?: string };
@@ -12,7 +12,7 @@ interface Props {
 
 export default function AvatarDropdown({ user, roleLabel, open, onToggle, onClose, avatarColor }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const initials = ((user.firstName?.[0] ?? '').toUpperCase() + (user.lastName?.[0] ?? '').toUpperCase()) || 'U';
+  const initials = ((user.firstName?.[0] ?? '').toUpperCase() + (user.lastName?.[0] ?? '').toUpperCase());
   const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email || 'User';
 
   useEffect(() => {
@@ -34,14 +34,14 @@ export default function AvatarDropdown({ user, roleLabel, open, onToggle, onClos
         aria-haspopup="menu"
         aria-label={`User menu — ${fullName}`}
       >
-        <span className="avd-avatar" style={{ background: avatarColor }}>{initials}</span>
+        <span className="avd-avatar" style={{ background: avatarColor }}>{initials || <User size={12} />}</span>
         <ChevronDown size={11} className={`avd-chev${open ? ' is-open' : ''}`} aria-hidden="true" />
       </button>
 
       {open && (
         <div className="avd-panel" role="menu">
           <div className="avd-header">
-            <span className="avd-header-avatar" style={{ background: avatarColor }}>{initials}</span>
+            <span className="avd-header-avatar" style={{ background: avatarColor }}>{initials || <User size={14} />}</span>
             <div className="avd-header-info">
               <span className="avd-name">{fullName}</span>
               <span className="avd-email">{user.email}</span>

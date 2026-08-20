@@ -168,7 +168,7 @@ export default function CaseAssignmentsScreen() {
                 showsHorizontalScrollIndicator={false}
                 data={fos}
                 keyExtractor={f => f.id}
-                contentContainerStyle={{ gap: spacing.s2 }}
+                contentContainerStyle={{ paddingHorizontal: spacing.s4, paddingBottom: spacing.s8, gap: spacing.s2 }}
                 renderItem={({ item }) => (
                   <Pressable
                     onPress={() => setSelectedFo(item.id)}
@@ -197,7 +197,7 @@ export default function CaseAssignmentsScreen() {
           onChange={setActiveTab}
         />
         
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.subtle, borderRadius: radius.md, paddingHorizontal: spacing.s3, marginVertical: spacing.s3, borderWidth: 1, borderColor: colors.border }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.subtle, borderRadius: radius.md, paddingHorizontal: spacing.s3, marginVertical: spacing.s3, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.s2 }}>
           <Search size={16} color={colors.ink3} />
           <TextInput
             value={search}

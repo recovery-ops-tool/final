@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, Modal, Image, Pressable } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
-  Handshake, Link2, Receipt, AlertTriangle, CloudOff, X, ImageIcon, Phone, MessageSquare,
+  Handshake, Link2, Receipt, AlertTriangle, CloudOff, X, ImageIcon, Phone, MessageSquare, Layers
 } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/theme/useTheme';

@@ -1,12 +1,49 @@
 import axiosInstance from './axiosInstance';
 import type { ApiResponse } from '@/types/core';
 
+export interface PlatformTrendPoint {
+  year: number;
+  month: number;
+  label: string;
+  totalAmount: number;
+  totalCount: number;
+}
+
+export interface PlatformAnalytics {
+  mrr: number;
+  arr: number;
+  mrrGrowthRate: number;
+  payingOrgs: number;
+  trialOrgs: number;
+  trialsEndingSoon: number;
+  planCounts: { none: number; starter: number; growth: number; enterprise: number };
+  statusCounts: { trial: number; active: number; pastDue: number; cancelled: number; inactive: number };
+  revenueTrend: PlatformTrendPoint[];
+  orgGrowthTrend: PlatformTrendPoint[];
+  topOrgsByUsers: { name: string; value: number }[];
+  userGrowthTrend: PlatformTrendPoint[];
+}
+
 export interface PlatformStats {
   totalOrgs: number;
   activeOrgs: number;
+  inactiveOrgs: number;
+  newOrgsThisMonth: number;
   totalUsers: number;
+  roleBreakdown: {
+    orgAdmin: number;
+    manager: number;
+    tl: number;
+    fo: number;
+    caller: number;
+    tracer: number;
+  };
   totalAllocations: number;
   totalUploads: number;
+  totalRowsProcessed: number;
+  uploadsLast7Days: number;
+  pendingUserRequests: number;
+  staleOrgs: number;
 }
 
 export interface OrganizationSummary {
@@ -52,6 +89,14 @@ export interface PlatformSubRow {
 export const platformApi = {
   getStats: async (): Promise<PlatformStats> => {
     const r = await axiosInstance.get<ApiResponse<PlatformStats>>('/api/v1/platform/stats');
+    return r.data.data;
+  },
+
+  getAnalytics: async (months = 6): Promise<PlatformAnalytics> => {
+    const r = await axiosInstance.get<ApiResponse<PlatformAnalytics>>(
+      '/api/v1/platform/analytics',
+      { params: { months } },
+    );
     return r.data.data;
   },
 

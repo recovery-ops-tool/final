@@ -37,24 +37,10 @@ export const NAV_SECTIONS: NavSection[] = [
       // Shared daily driver — everyone sees this first.
       // Children are gated tighter than the parent on purpose: Dashboard is
       // visible to FO/CALLER/TRACER, but money and risk pages are not.
-      { label: 'Dashboard',   to: '/app/dashboard',   icon: BarChart2, alwaysFor: ['ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER'],
-        children: [
-          // Collections gets its own top-level button for MANAGER/TL below;
-          // ORG_ADMIN still reaches it from here.
-          { label: 'Collections',      to: '/app/collections',       icon: Banknote,   alwaysFor: ['ORG_ADMIN'] },
-          { label: 'Portfolio Risk',   to: '/app/portfolio-risk',    icon: LineChart,  alwaysFor: ['ORG_ADMIN','MANAGER','TL'] },
-          // Ground truth: ReconciliationController.java is @PreAuthorize
-          // hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN') on every endpoint — MANAGER
-          // never had backend access, so showing it the link was a dead end.
-          { label: 'Reconciliation',   to: '/app/reconciliation',    icon: Receipt,    alwaysFor: ['ORG_ADMIN'] },
-          // Ground truth: PaymentController.java is @PreAuthorize
-          // hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN','FO') on every endpoint —
-          // MANAGER/TL never had backend access (dead link); FO did, but had no
-          // sidebar link at all until now.
-          { label: 'Payment Links',    to: '/app/payments/links',    icon: Link2,      alwaysFor: ['ORG_ADMIN','FO'] },
-        ] },
+      { label: 'Dashboard',   to: '/app/dashboard',   icon: BarChart2, alwaysFor: ['ORG_ADMIN','MANAGER','TL','FO','CALLER','TRACER'] },
 
       // Field roles (FO / CALLER / TRACER) — their whole job in a handful of links.
+
       // Today's Visits stays off CALLER's bar — CALLER is phone-based, with no
       // field-visit workflow to land on.
       { label: "Today's Visits", to: '/app/today',        icon: CalendarDays,   alwaysFor: ['FO','TRACER'],
@@ -80,6 +66,9 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: 'Daily Dispatch', to: '/app/dispatch',   icon: Send,      alwaysFor: ['TL'], permissions: ['DAILY_DISPATCH_CREATE'] },
       { label: 'Loans',          to: '/app/allocations', icon: Layers,    alwaysFor: ['ORG_ADMIN','MANAGER','TL'],
         children: [
+          { label: 'Portfolio Risk',        to: '/app/portfolio-risk',        icon: LineChart,     alwaysFor: ['ORG_ADMIN','MANAGER','TL'] },
+          { label: 'Reconciliation',        to: '/app/reconciliation',        icon: Receipt,       alwaysFor: ['ORG_ADMIN'] },
+          { label: 'Payment Links',         to: '/app/payments/links',        icon: Link2,         alwaysFor: ['ORG_ADMIN','FO'] },
           // Ground truth: BorrowerController.java is @PreAuthorize
           // hasAnyRole('ORG_ADMIN','PLATFORM_ADMIN') on its list/detail endpoints
           // (FO only holds a few write endpoints, not the listing) — MANAGER/TL
@@ -103,7 +92,7 @@ export const NAV_SECTIONS: NavSection[] = [
           { label: 'Visit Log',        to: '/app/visits',           icon: FileClock,     alwaysFor: ['MANAGER','TL'] },
         ] },
       { label: 'Collections',    to: '/app/collections', icon: Banknote,  alwaysFor: ['MANAGER','TL'] },
-      { label: 'Reports',        to: '/app/reports',     icon: LineChart, alwaysFor: ['ORG_ADMIN','MANAGER','TL'] },
+
       // Ground truth: UploadsPage.tsx self-gates on UPLOAD_READER_ROLES =
       // [PLATFORM_ADMIN, ORG_ADMIN, MANAGER, TL], and ORG_ADMIN's seeded
       // permission set (V017__bootstrap_data.sql) includes FILE_UPLOAD/FILE_VIEW/FILE_DELETE
@@ -126,6 +115,7 @@ export const NAV_SECTIONS: NavSection[] = [
           { label: 'Holiday calendar',   to: '/app/calendar',                    icon: CalendarDays,       alwaysFor: ['ORG_ADMIN'] },
           { label: 'Billing',            to: '/app/subscription',                icon: CreditCard,         alwaysFor: ['ORG_ADMIN'] },
         ] },
+      { label: 'Reports',        to: '/app/reports',     icon: LineChart, alwaysFor: ['ORG_ADMIN','MANAGER','TL'] },
 
       // Platform admin — a distinct console, not the org workspace at all.
       // Revenue Trend dropped to stay within the cap — it's a drill-down still

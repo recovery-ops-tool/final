@@ -1,6 +1,6 @@
 import { useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserCheck, CheckCircle2, Users, Briefcase } from 'lucide-react';
+import { UserCheck, CheckCircle2, Users, Briefcase, User } from 'lucide-react';
 import type { UserResponse } from '../types';
 import { hashColor } from '../utils/navConfig';
 import { DonutCard } from './DashboardShared';
@@ -15,7 +15,7 @@ interface Props {
 }
 
 const initials = (f: UserResponse) =>
-  `${f.firstName?.[0] ?? ''}${f.lastName?.[0] ?? ''}`.toUpperCase() || '?';
+  `${f.firstName?.[0] ?? ''}${f.lastName?.[0] ?? ''}`.toUpperCase();
 
 export default function AssignFoPanel({ fos, fosLoading, fosStats, selectedFo, onSelect }: Props) {
 
@@ -63,7 +63,7 @@ export default function AssignFoPanel({ fos, fosLoading, fosStats, selectedFo, o
                     className="dd-fo-avatar"
                     style={{ background: hashColor(`${f.firstName}${f.lastName}`), color: 'var(--text-on-solid)', border: 'none' }}
                   >
-                    {initials(f)}
+                    {initials(f) || <User size={14} />}
                   </span>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
                     <span className="dd-agent-row-name">

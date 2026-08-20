@@ -17,7 +17,12 @@ import com.recoverpro.server.repository.AllocationRepository;
 import com.recoverpro.server.repository.BorrowerRepository;
 import com.recoverpro.server.repository.CallLogRepository;
 import com.recoverpro.server.repository.UserRepository;
+import com.recoverpro.server.enums.AuditAction;
+import com.recoverpro.server.enums.AuditResourceType;
+import com.recoverpro.server.enums.AuditResult;
 import com.recoverpro.server.service.AllocationService;
+import com.recoverpro.server.service.AuditEventRequest;
+import com.recoverpro.server.service.AuditService;
 import com.recoverpro.server.service.CallLogService;
 import com.recoverpro.server.service.storage.StoragePort;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +66,7 @@ public class CallLogServiceImpl implements CallLogService {
     private final UserRepository userRepository;
     private final StoragePort storagePort;
     private final CallLogFailureRecorder callLogFailureRecorder;
+    private final AuditService auditService;
 
     @Value("${app.storage.call-recordings-path:./uploads/call-recordings}")
     private String storagePath;
@@ -90,6 +96,8 @@ public class CallLogServiceImpl implements CallLogService {
                 .build();
         CallLog saved = callLogRepository.save(callLog);
         log.info("Call started: id={} allocation={} agent={}", saved.getId(), allocationId, agentId);
+        auditCallLog(saved.getId(), AuditAction.CALL_STARTED, AuditResult.SUCCESS, null,
+                Map.of("allocationId", allocationId.toString()));
 
         return CallStartResponse.builder()
                 .callLogId(saved.getId())
@@ -114,6 +122,7 @@ public class CallLogServiceImpl implements CallLogService {
         } catch (Exception e) {
             log.error("Failed to store call recording for callLog {}: {}", callLogId, e.getMessage(), e);
             callLogFailureRecorder.markFailed(callLogId);
+            auditCallLog(callLogId, AuditAction.CALL_RECORDING_UPLOADED, AuditResult.FAILURE, e.getMessage(), null);
             throw new BusinessException("Failed to store call recording: " + e.getMessage());
         }
 
@@ -121,6 +130,7 @@ public class CallLogServiceImpl implements CallLogService {
         callLog.setRecordingStatus(RecordingStatus.UPLOADED);
         callLogRepository.save(callLog);
         log.info("Call recording stored: callLogId={} location={}", callLogId, storedPath);
+        auditCallLog(callLogId, AuditAction.CALL_RECORDING_UPLOADED, AuditResult.SUCCESS, null, null);
     }
 
     @Override
@@ -136,6 +146,8 @@ public class CallLogServiceImpl implements CallLogService {
         }
         CallLog saved = callLogRepository.save(callLog);
         log.info("Call completed: id={} outcome={}", callLogId, request.getOutcome());
+        auditCallLog(callLogId, AuditAction.CALL_COMPLETED, AuditResult.SUCCESS, null,
+                Map.of("outcome", String.valueOf(request.getOutcome())));
         return toResponse(saved);
     }
 
@@ -186,6 +198,9 @@ public class CallLogServiceImpl implements CallLogService {
         if (callLog.getRecordingStatus() != RecordingStatus.UPLOADED || callLog.getRecordingPath() == null) {
             throw new BusinessException("No recording is available for this call.");
         }
+
+        auditCallLog(callLogId, AuditAction.CALL_RECORDING_ACCESSED, AuditResult.SUCCESS, null,
+                Map.of("allocationId", callLog.getAllocationId().toString()));
 
         if (storagePort.isS3Enabled()) {
             String url = storagePort.presignedUrl(callLog.getRecordingPath(), Duration.ofHours(signedUrlDurationHours));
@@ -255,6 +270,20 @@ public class CallLogServiceImpl implements CallLogService {
                 .notes(callLog.getNotes())
                 .recordingStatus(callLog.getRecordingStatus())
                 .build();
+    }
+
+    /** Actor/org resolve from live request context (SecurityContextHolder/RlsOrgIdHolder) --
+     *  every call site here runs inside an authenticated, org-scoped controller call. */
+    private void auditCallLog(UUID callLogId, AuditAction action, AuditResult result, String reason,
+                               Map<String, Object> metadata) {
+        auditService.record(AuditEventRequest.builder()
+                .action(action)
+                .resourceType(AuditResourceType.CALL_LOG)
+                .resourceId(callLogId.toString())
+                .result(result)
+                .reason(reason)
+                .metadata(metadata)
+                .build());
     }
 
     private String displayName(User u) {

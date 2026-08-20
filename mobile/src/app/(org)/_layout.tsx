@@ -42,6 +42,10 @@ export default function OrgLayout() {
           options={{ headerShown: true, title: 'Call borrower', presentation: 'modal' }}
         />
         <Stack.Screen
+          name="case/[id]/loan-details"
+          options={{ headerShown: true, title: 'Loan details', presentation: 'modal' }}
+        />
+        <Stack.Screen
           name="sos"
           options={{ headerShown: true, title: '', presentation: 'fullScreenModal' }}
         />
@@ -52,6 +56,10 @@ export default function OrgLayout() {
         <Stack.Screen
           name="mfa-setup"
           options={{ headerShown: true, title: 'Two-factor setup', presentation: 'fullScreenModal' }}
+        />
+        <Stack.Screen
+          name="change-password"
+          options={{ headerShown: true, title: 'Change Password', presentation: 'card' }}
         />
         <Stack.Screen
           name="ptps"
@@ -200,6 +208,14 @@ export default function OrgLayout() {
         <Stack.Screen
           name="subscription"
           options={{ headerShown: true, title: 'Subscription & Billing', presentation: 'card' }}
+        />
+        <Stack.Screen
+          name="today"
+          options={{ headerShown: false, presentation: 'card' }}
+        />
+        <Stack.Screen
+          name="collection/[id]"
+          options={{ headerShown: false, presentation: 'card' }}
         />
       </Stack>
       <SosFloatingButton />

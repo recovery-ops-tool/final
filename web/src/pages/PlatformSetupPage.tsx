@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import { platformApi } from '../api/platformApi';
 import type { OrganizationSummary } from '../api/platformApi';
+import { PageFab } from '../components/PageFab';
 import { OrgsTab } from './PlatformSetupOrgsTab';
 import { UsersTab } from './PlatformSetupUsersTab';
 import '../styles/AppPage.css';
@@ -30,45 +31,29 @@ export default function PlatformSetupPage() {
     <div className="db-root">
       <div className="db-content">
         <motion.div className="db-inner" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <div className="db-page-header">
-            <p className="dd-page-context">
+          <div className="db-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}>
+            <p className="dd-page-context" style={{ margin: 0 }}>
               Manage organizations and platform users
             </p>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => setSearchParams({ tab: 'orgs' })}
-                style={{
-                  background: tab === 'orgs' ? 'var(--brand)' : 'transparent',
-                  color: tab === 'orgs' ? 'var(--text-on-solid, #fff)' : 'var(--ink-secondary)',
-                  border: tab === 'orgs' ? '1px solid var(--brand)' : '1px solid var(--border-color)',
-                  borderRadius: 6,
-                  padding: '6px 14px',
-                  fontSize: 13,
-                  fontWeight: tab === 'orgs' ? 600 : 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                Organizations
-              </button>
-              <button
-                type="button"
-                onClick={() => setSearchParams({ tab: 'users' })}
-                style={{
-                  background: tab === 'users' ? 'var(--brand)' : 'transparent',
-                  color: tab === 'users' ? 'var(--text-on-solid, #fff)' : 'var(--ink-secondary)',
-                  border: tab === 'users' ? '1px solid var(--brand)' : '1px solid var(--border-color)',
-                  borderRadius: 6,
-                  padding: '6px 14px',
-                  fontSize: 13,
-                  fontWeight: tab === 'users' ? 600 : 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                Users
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div className="db-kpi-toggle" role="group" aria-label="Setup view">
+                <button
+                  type="button"
+                  className={`db-kpi-toggle-btn${tab === 'orgs' ? ' is-active' : ''}`}
+                  onClick={() => setSearchParams({ tab: 'orgs' })}
+                  aria-pressed={tab === 'orgs'}
+                >
+                  Organizations
+                </button>
+                <button
+                  type="button"
+                  className={`db-kpi-toggle-btn${tab === 'users' ? ' is-active' : ''}`}
+                  onClick={() => setSearchParams({ tab: 'users' })}
+                  aria-pressed={tab === 'users'}
+                >
+                  Users
+                </button>
+              </div>
             </div>
           </div>
           <AnimatePresence mode="wait">
@@ -87,22 +72,11 @@ export default function PlatformSetupPage() {
         </motion.div>
       </div>
       {(tab === 'orgs' || tab === 'users') && (
-        <button type="button"
+        <PageFab
+          icon={<Plus size={24} />}
+          label={tab === 'orgs' ? 'New organization' : 'New admin user'}
           onClick={() => tab === 'orgs' ? setShowCreateOrg(true) : setShowCreateUser(true)}
-          title={tab === 'orgs' ? 'New organization' : 'New admin user'}
-          aria-label={tab === 'orgs' ? 'New organization' : 'New admin user'}
-          style={{
-            position: 'fixed', bottom: 28, right: 32, zIndex: 50,
-            width: 56, height: 56, borderRadius: '50%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'var(--brand)', border: 'none', color: 'var(--text-on-solid)', cursor: 'pointer',
-            boxShadow: '0 8px 20px color-mix(in srgb, var(--text-primary) 22%, transparent), 0 2px 6px color-mix(in srgb, var(--text-primary) 14%, transparent)',
-            transition: 'transform 120ms ease, box-shadow 120ms ease',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.06)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
-          <Plus size={24} />
-        </button>
+        />
       )}
     </div>
   );

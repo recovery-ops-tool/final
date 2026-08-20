@@ -68,17 +68,16 @@ export default function PortfolioRiskScreen() {
   if (loading) return <LoadingView label="Loading portfolio risk details…" />;
 
   return (
-    <Screen edges={['top']}>
-      <View style={{ gap: spacing.s4, paddingBottom: spacing.s4 }}>
-        <View>
-          <Text variant="title">Portfolio Risk Exposure</Text>
-          <Text variant="caption" color="secondary">{records.length} total exposure items</Text>
+    <Screen scroll={false} padded={false} edges={['top']}>
+      <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s2, gap: spacing.s4 }}>
+        <View style={{ marginTop: -8 }}>
+          <Text style={{ fontSize: 13, fontWeight: '400', color: colors.ink3, fontFamily: 'Inter_400Regular' }}>Portfolio risk exposure</Text>
         </View>
 
         <View style={{
           flexDirection: 'row', alignItems: 'center', gap: spacing.s2,
           backgroundColor: colors.subtle, borderRadius: radius.md, paddingHorizontal: spacing.s3,
-          borderWidth: 1, borderColor: colors.border,
+          borderWidth: 1, borderColor: colors.border, marginBottom: spacing.s2
         }}
         >
           <Search size={16} color={colors.ink3} />
@@ -99,7 +98,7 @@ export default function PortfolioRiskScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ gap: spacing.s3 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.s4, paddingBottom: spacing.s8, gap: spacing.s3 }}
           renderItem={({ item }) => (
             <Card style={{ padding: spacing.s4, gap: spacing.s2 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -124,7 +123,6 @@ export default function PortfolioRiskScreen() {
           )}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          scrollEnabled={false}
           ListEmptyComponent={
             loadError ? (
               <EmptyState icon={WifiOff} title="Couldn't load risk items" message="Pull down to try again." />

@@ -56,8 +56,10 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }} edges={['top']}>
-      <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s4, paddingBottom: spacing.s2, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text variant="title">Alerts</Text>
+      <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s2, paddingBottom: spacing.s2, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ marginTop: -8 }}>
+          <Text style={{ fontSize: 13, fontWeight: '400', color: colors.ink3, fontFamily: 'Inter_400Regular' }}>Alerts</Text>
+        </View>
         {items.length > 0 ? (
           <View style={{ flexDirection: 'row', gap: spacing.s3 }}>
             <Pressable onPress={async () => {

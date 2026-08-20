@@ -9,13 +9,13 @@ import type { AllocationResponse } from '@/types/domain';
 
 const DPD_TONE_MAP = { neutral: 'neutral', warn: 'warning', high: 'warning', critical: 'error' } as const;
 
-export function CaseRow({ item, completed }: { item: AllocationResponse; completed?: boolean }) {
+export function CaseRow({ item, completed, onPress }: { item: AllocationResponse; completed?: boolean; onPress?: () => void }) {
   const { colors, spacing } = useTheme();
   const amount = resolveAmount(item);
   const dpd = resolveDPD(item);
 
   return (
-    <Card onPress={() => router.push({ pathname: '/(org)/case/[id]', params: { id: item.id } })} style={{ marginBottom: spacing.s3 }}>
+    <Card onPress={onPress || (() => router.push({ pathname: '/(org)/case/[id]', params: { id: item.id } }))} style={{ marginBottom: spacing.s3 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
         <View style={{ flex: 1, gap: spacing.s1 + 2 }}>
           <Text variant="bodyMedium" numberOfLines={1}>{item.borrowerName || 'Unknown borrower'}</Text>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock, Check } from 'lucide-react';
 import { profileSettings, useProfileSettingsOpen } from '../utils/profileSettings';
+import { useSubscription } from '../hooks/useSubscription';
 import './MfaGate.css';
 
 function useRipple<T extends HTMLElement>() {
@@ -30,6 +31,7 @@ interface MfaGateProps {
 
 export default function MfaGate({ mfaEnabled }: MfaGateProps) {
   const settingsOpen = useProfileSettingsOpen();
+  const { sub, loading, isExpired, isPlatformAdmin } = useSubscription();
   const [visible,   setVisible]   = useState(false);
   const [elapsed,   setElapsed]   = useState(0); // 0..1 fraction
   const rafRef    = useRef<number | null>(null);
@@ -37,7 +39,10 @@ export default function MfaGate({ mfaEnabled }: MfaGateProps) {
   const cta = useRipple<HTMLButtonElement>();
 
   useEffect(() => {
-    if (mfaEnabled || settingsOpen) {
+    const subSnoozedUntil = Number(localStorage.getItem('rp-sub-expired-snoozed-until') ?? 0);
+    const isSubModalVisible = !loading && !isPlatformAdmin && !!sub && isExpired && subSnoozedUntil <= Date.now();
+
+    if (mfaEnabled || settingsOpen || isSubModalVisible) {
       setVisible(false);
       return;
     }
@@ -48,7 +53,7 @@ export default function MfaGate({ mfaEnabled }: MfaGateProps) {
       return () => window.clearTimeout(t);
     }
     setVisible(true);
-  }, [mfaEnabled, settingsOpen]);
+  }, [mfaEnabled, settingsOpen, loading, isPlatformAdmin, sub, isExpired]);
 
   useEffect(() => {
     if (!visible) return;

@@ -384,7 +384,10 @@ export interface CompleteCallRequest {
 export interface CallLogResponse {
   id: string;
   allocationId: string;
+  loanNumber?: string;
+  borrowerName?: string;
   agentId: string;
+  agentName?: string;
   initiatedAt: string;
   endedAt?: string;
   durationSeconds?: number;
@@ -484,6 +487,20 @@ export interface TopAgentPoint {
   count: number;
 }
 
+export interface TrendPoint {
+  year: number;
+  month: number;
+  label: string;
+  totalAmount: number;
+  totalCount: number;
+}
+
+export interface TopAgentPoint {
+  name: string;
+  amount: number;
+  count: number;
+}
+
 export interface CollectionsSection {
   collectionVolumeThisMonth: number;
   collectionCountThisMonth: number;
@@ -495,10 +512,75 @@ export interface CollectionsSection {
   topAgents?: TopAgentPoint[];
 }
 
-export interface UnifiedDashboardResponse {
-  role: string;
+export interface OrgOverviewSection {
   organizationId: string;
-  generatedAt: string;
-  collections?: CollectionsSection;
+  organizationName: string;
+  totalAllocations: number;
+  assignedAllocations: number;
+  unassignedAllocations: number;
+  totalUsers: number;
+  collectionVolumeThisMonth: number;
+  collectionsThisMonth: number;
+  outstandingTotal?: number;
 }
 
+export interface OrgTodaySection {
+  collectedToday: number;
+  collectedYesterday: number;
+  visitsTotalToday: number;
+  visitsCompletedToday: number;
+  visitsInProgressToday: number;
+  visitsPendingToday: number;
+  fosTotalCount: number;
+  fosActiveToday: number;
+  fosIdleToday: number;
+  ptpsDueToday: number;
+  ptpAmountDueToday: number;
+}
+
+export interface CallerSection {
+  casesAssignedToday: number;
+  callsCompletedToday: number;
+  callsPendingToday: number;
+  ptpsMadeToday: number;
+  amountCommittedToday: number;
+}
+
+export interface CaseAgeBucket {
+  label: string;
+  count: number;
+}
+
+export interface AllocationsSection {
+  totalAllocations: number;
+  assignedCount: number;
+  unassignedCount: number;
+  npaFlaggedCount: number;
+  caseAgeBuckets?: CaseAgeBucket[];
+}
+
+export interface PtpSummarySection {
+  activePtps: number;
+  brokenPtpsThisMonth: number;
+  fulfilledPtpsThisMonth: number;
+  fulfillmentRatePct: number;
+}
+
+export interface TeamSection {
+  totalUsers: number;
+  activeUsers: number;
+  usersByRole: { roleName: string; count: number }[];
+}
+
+export interface UnifiedDashboardResponse {
+  role: string;
+  organizationId?: string;
+  generatedAt: string;
+  orgOverview?: OrgOverviewSection;
+  orgToday?: OrgTodaySection;
+  collections?: CollectionsSection;
+  allocations?: AllocationsSection;
+  ptpSummary?: PtpSummarySection;
+  team?: TeamSection;
+  callerToday?: CallerSection;
+}

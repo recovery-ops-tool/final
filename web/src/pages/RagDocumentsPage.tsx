@@ -3,6 +3,7 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { FileText, Trash2, Loader2, AlertCircle, X, Plus, UploadCloud, SquarePen } from 'lucide-react';
 import { ragApi } from '../api/ragApi';
 import type { RagDocumentResponse, RagStatus } from '../api/ragApi';
+import { PageFab } from '../components/PageFab';
 import { Modal, ModalFooter, FormSection, Input } from './PlatformSetupShared';
 import '../styles/AppPage.css';
 import '../styles/PlatformSetupPage.css';
@@ -275,20 +276,7 @@ export default function RagDocumentsPage({ headerExtra }: { headerExtra?: ReactN
         </motion.div>
       </div>
 
-      <button type="button" onClick={openUpload}
-        title="New document" aria-label="New document"
-        style={{
-          position: 'fixed', bottom: 28, right: 32, zIndex: 50,
-          width: 56, height: 56, borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'var(--brand)', border: 'none', color: 'var(--text-on-solid)', cursor: 'pointer',
-          boxShadow: '0 8px 20px color-mix(in srgb, var(--text-primary) 22%, transparent), 0 2px 6px color-mix(in srgb, var(--text-primary) 14%, transparent)',
-          transition: 'transform 120ms ease, box-shadow 120ms ease',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.06)'; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
-        <Plus size={24} />
-      </button>
+      <PageFab icon={<Plus size={24} />} label="New document" onClick={openUpload} />
     </div>
   );
 }

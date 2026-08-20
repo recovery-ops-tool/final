@@ -1,17 +1,19 @@
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, TextInput, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
-import { Briefcase, ChevronLeft, Search, WifiOff, X } from 'lucide-react-native';
+import { useFocusEffect, router } from 'expo-router';
+import { Briefcase, Search, WifiOff, X, ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/theme/useTheme';
 import { Text, EmptyState, LoadingView } from '@/components/ui';
 import { CaseRow } from '@/components/CaseRow';
+import { dailyDispatchApi } from '@/api/dailyDispatchApi';
 import { allocationsApi } from '@/api/allocationsApi';
 import { resolveDPD } from '@/utils/allocationHeuristics';
 import type { AllocationResponse } from '@/types/domain';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { todayIso } from '@/utils/date';
 
-export default function MyCasesScreen() {
+export default function TodayVisitsScreen() {
   const { user } = useAuth();
   const { colors, spacing, radius } = useTheme();
 
@@ -24,8 +26,14 @@ export default function MyCasesScreen() {
   const load = useCallback(async () => {
     if (!user) return;
     try {
-      const paged = await allocationsApi.getMyCases(user.id, { size: 200 });
-      setCases(paged.content);
+      let data: AllocationResponse[] = [];
+      try {
+        data = await dailyDispatchApi.myList(todayIso());
+      } catch (e) {
+        const paged = await allocationsApi.getMyCases(user.id, { size: 200 });
+        data = paged.content;
+      }
+      setCases(data);
       setLoadError(false);
     } catch {
       setLoadError(true);
@@ -53,29 +61,24 @@ export default function MyCasesScreen() {
     return [...base].sort((a, b) => (resolveDPD(b) ?? -1) - (resolveDPD(a) ?? -1));
   }, [cases, search]);
 
-  if (loading) return <LoadingView label="Loading your cases…" />;
+  if (loading) return <LoadingView label="Loading today's visits…" />;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }} edges={['top']}>
-      <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s4, gap: spacing.s4 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
-            <Pressable onPress={() => router.back()} hitSlop={8}>
-              <ChevronLeft size={22} color="#374151" />
-            </Pressable>
-            <Text style={{ fontSize: 13, color: '#9CA3AF', fontFamily: 'Inter_500Medium' }}>Cases</Text>
-          </View>
-          <Pressable
-            onPress={() => router.push('/(org)/(tabs)/loans')}
-            style={{ backgroundColor: '#F3F4F6', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
-          >
-            <Text style={{ fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' }}>All Cases</Text>
+      <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s2, gap: spacing.s4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3, marginTop: spacing.s2 }}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={{ marginTop: -2 }}>
+            <ArrowLeft size={20} color={colors.ink1} />
           </Pressable>
+          <View style={{ marginTop: -8 }}>
+            <Text style={{ fontSize: 13, fontWeight: '400', color: colors.ink3, fontFamily: 'Inter_400Regular' }}>Today's visits</Text>
+          </View>
         </View>
+
         <View style={{
           flexDirection: 'row', alignItems: 'center', gap: spacing.s2,
           backgroundColor: colors.subtle, borderRadius: radius.md, paddingHorizontal: spacing.s3,
-          borderWidth: 1, borderColor: colors.border,
+          borderWidth: 1, borderColor: colors.border, marginBottom: spacing.s2
         }}
         >
           <Search size={16} color={colors.ink3} />
@@ -97,7 +100,7 @@ export default function MyCasesScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: spacing.s4, paddingBottom: spacing.s8 }}
+        contentContainerStyle={{ paddingHorizontal: spacing.s4, paddingBottom: spacing.s8 }}
         renderItem={({ item }) => <CaseRow item={item} />}
         refreshing={refreshing}
         onRefresh={onRefresh}
@@ -107,8 +110,8 @@ export default function MyCasesScreen() {
             : (
               <EmptyState
                 icon={Briefcase}
-                title="No cases found"
-                message={search ? 'Try adjusting your search.' : 'No cases are currently assigned to you.'}
+                title="No visits found"
+                message={search ? 'Try adjusting your search.' : 'No visits are scheduled for today.'}
               />
             )
         }

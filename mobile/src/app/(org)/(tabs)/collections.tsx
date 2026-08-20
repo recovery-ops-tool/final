@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { FlatList, View, StyleSheet, TouchableOpacity, Share, Modal, Pressable, ScrollView, SafeAreaView } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { DollarSign, WifiOff, X, Banknote, FileText, CreditCard, Calendar, User, CheckCircle2, Download } from 'lucide-react-native';
+import { FlatList, View, StyleSheet, TouchableOpacity, Share, Modal, Pressable, ScrollView, SafeAreaView, TextInput } from 'react-native';
+import { useFocusEffect, router } from 'expo-router';
+import { DollarSign, WifiOff, X, Banknote, FileText, CreditCard, Calendar, User, CheckCircle2, Download, Search } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/theme/useTheme';
 import { Screen, Text, Card, Badge, EmptyState, LoadingView, Divider, Button } from '@/components/ui';
@@ -20,6 +20,16 @@ export default function CollectionsHubScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [collections, setCollections] = useState<CollectionResponse[]>([]);
   const [loadError, setLoadError] = useState(false);
+  const [search, setSearch] = useState('');
+  
+  const filteredCollections = collections.filter(c => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return c.id?.toLowerCase().includes(q) || 
+           c.status?.toLowerCase().includes(q) || 
+           c.paymentMode?.toLowerCase().includes(q) ||
+           (c.submittedBy || '').toLowerCase().includes(q);
+  });
   
   const [selectedCol, setSelectedCol] = useState<CollectionResponse | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -91,29 +101,46 @@ export default function CollectionsHubScreen() {
   if (loading) return <LoadingView label="Loading collections…" />;
 
   return (
-    <Screen edges={['top']}>
-      <View style={{ gap: spacing.s4, paddingBottom: spacing.s4 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View>
-            <Text variant="title">Collections</Text>
-            <Text variant="caption" color="secondary">{collections.length} transaction records</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: spacing.s3, alignItems: 'center' }}>
-            <Pressable 
-              onPress={() => setShowExportModal(true)} 
-              style={{ padding: 4 }}
-            >
-              <Download size={20} color={colors.ink2} />
-            </Pressable>
-          </View>
+    <Screen scroll={false} padded={false} edges={['top']}>
+      <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s2, gap: spacing.s4 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Text style={{ fontSize: 13, fontWeight: '400', color: colors.ink3, fontFamily: 'Inter_400Regular' }}>Collections</Text>
+          <Pressable 
+            onPress={() => setShowExportModal(true)} 
+            style={{ padding: 4, marginTop: -4 }}
+          >
+            <Download size={20} color={colors.ink2} />
+          </Pressable>
         </View>
 
-        <FlatList
-          data={collections}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ gap: spacing.s3 }}
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: spacing.s2,
+          backgroundColor: colors.subtle, borderRadius: radius.md, paddingHorizontal: spacing.s3,
+          borderWidth: 1, borderColor: colors.border, marginBottom: spacing.s2
+        }}
+        >
+          <Search size={16} color={colors.ink3} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search by ID, status, or mode…"
+            placeholderTextColor={colors.ink3}
+            style={{ flex: 1, paddingVertical: spacing.s3, color: colors.ink1, fontFamily: 'Inter_400Regular', fontSize: 15 }}
+          />
+          {search.length > 0 ? (
+            <Pressable onPress={() => setSearch('')} hitSlop={8}>
+              <X size={16} color={colors.ink3} />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+
+      <FlatList
+        data={filteredCollections}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingHorizontal: spacing.s4, paddingBottom: spacing.s8, gap: spacing.s3 }}
           renderItem={({ item }) => (
-            <Pressable onPress={() => setSelectedCol(item)}>
+            <Pressable onPress={() => router.push({ pathname: '/(org)/collection/[id]', params: { id: item.id, item: JSON.stringify(item) } })}>
               <Card style={{ padding: spacing.s4, gap: spacing.s2 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text variant="bodyMedium" style={{ fontWeight: '700', color: colors.ink1, flex: 1 }}>
@@ -140,7 +167,6 @@ export default function CollectionsHubScreen() {
           )}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          scrollEnabled={false}
           ListEmptyComponent={
             loadError ? (
               <EmptyState icon={WifiOff} title="Couldn't load collections" message="Pull down to try again." />
@@ -153,175 +179,6 @@ export default function CollectionsHubScreen() {
             )
           }
         />
-      </View>
-
-      {/* Collection Details Modal */}
-      <Modal visible={!!selectedCol} animationType="slide" transparent>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: colors.canvas, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, maxHeight: '90%', flex: 1 }}>
-            
-            {/* Header */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: spacing.s4, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-              <View style={{ flex: 1 }}>
-                <Text variant="title" style={{ fontSize: 24, letterSpacing: -0.5 }}>{formatCurrency(selectedCol?.amount || 0)}</Text>
-                <Text variant="caption" color="secondary" style={{ marginTop: 2 }}>{selectedCol?.paymentMode.replace('_', ' ')} · {formatDate(selectedCol?.collectionDate || '')}</Text>
-              </View>
-              <Pressable onPress={() => setSelectedCol(null)} style={{ padding: 4 }}>
-                <X size={20} color={colors.ink2} />
-              </Pressable>
-            </View>
-
-            <ScrollView contentContainerStyle={{ padding: spacing.s4, gap: spacing.s6 }}>
-              
-              {/* Pills */}
-              <View style={{ flexDirection: 'row', gap: spacing.s2, flexWrap: 'wrap' }}>
-                <Badge tone={getStatusTone(selectedCol?.status || '')} label={(selectedCol?.status || '').replace('_', ' ')} />
-                <Badge tone="neutral" label={(selectedCol?.paymentMode || '').replace('_', ' ')} />
-              </View>
-
-              {/* Collection details */}
-              <View style={{ gap: spacing.s2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <Banknote size={14} color={colors.ink2} />
-                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Collection details</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text variant="caption" color="secondary">Amount</Text>
-                  <Text variant="caption" style={{ fontWeight: '600', color: colors.success }}>{formatCurrency(selectedCol?.amount || 0)}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text variant="caption" color="secondary">Collection date</Text>
-                  <Text variant="caption" style={{ fontWeight: '500' }}>{formatDate(selectedCol?.collectionDate || '')}</Text>
-                </View>
-                {selectedCol?.receiptNumber && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text variant="caption" color="secondary">Receipt</Text>
-                    <Text variant="caption" style={{ fontWeight: '500' }}>{selectedCol.receiptNumber}</Text>
-                  </View>
-                )}
-                {selectedCol?.notes && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text variant="caption" color="secondary">Notes</Text>
-                    <Text variant="caption" style={{ fontWeight: '400' }}>{selectedCol.notes}</Text>
-                  </View>
-                )}
-                {selectedCol?.rejectionReason && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text variant="caption" color="secondary">Rejection reason</Text>
-                    <Text variant="caption" style={{ fontWeight: '500', color: colors.error }}>{selectedCol.rejectionReason}</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Cheque details */}
-              {(selectedCol?.chequeNumber || selectedCol?.chequeDate || selectedCol?.bankName) && (
-                <View style={{ gap: spacing.s2 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <CreditCard size={14} color={colors.ink2} />
-                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Cheque details</Text>
-                  </View>
-                  {selectedCol?.chequeNumber && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text variant="caption" color="secondary">Cheque number</Text>
-                      <Text variant="caption" style={{ fontWeight: '500' }}>{selectedCol.chequeNumber}</Text>
-                    </View>
-                  )}
-                  {selectedCol?.chequeDate && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text variant="caption" color="secondary">Cheque date</Text>
-                      <Text variant="caption" style={{ fontWeight: '500' }}>{formatDate(selectedCol.chequeDate)}</Text>
-                    </View>
-                  )}
-                  {selectedCol?.bankName && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text variant="caption" color="secondary">Bank</Text>
-                      <Text variant="caption" style={{ fontWeight: '500' }}>{selectedCol.bankName}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Transaction reference */}
-              {(selectedCol?.upiReferenceId || selectedCol?.transactionReferenceId) && (
-                <View style={{ gap: spacing.s2 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <CreditCard size={14} color={colors.ink2} />
-                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Transaction reference</Text>
-                  </View>
-                  {selectedCol?.upiReferenceId && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text variant="caption" color="secondary">UPI reference</Text>
-                      <Text variant="caption" style={{ fontWeight: '500' }}>{selectedCol.upiReferenceId}</Text>
-                    </View>
-                  )}
-                  {selectedCol?.transactionReferenceId && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text variant="caption" color="secondary">Transaction ID</Text>
-                      <Text variant="caption" style={{ fontWeight: '500' }}>{selectedCol.transactionReferenceId}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Timeline */}
-              <View style={{ gap: spacing.s2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <Calendar size={14} color={colors.ink2} />
-                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>Timeline</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text variant="caption" color="secondary">Submitted</Text>
-                  <Text variant="caption" style={{ fontWeight: '500' }}>{formatDateTime(selectedCol?.createdAt || '')}</Text>
-                </View>
-                {selectedCol?.approvedAt && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text variant="caption" color="secondary">Approved at</Text>
-                    <Text variant="caption" style={{ fontWeight: '500' }}>{formatDateTime(selectedCol.approvedAt)}</Text>
-                  </View>
-                )}
-                {selectedCol?.depositedAt && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text variant="caption" color="secondary">Deposited at</Text>
-                    <Text variant="caption" style={{ fontWeight: '500' }}>{formatDateTime(selectedCol.depositedAt)}</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* People */}
-              <View style={{ gap: spacing.s2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <User size={14} color={colors.ink2} />
-                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>People</Text>
-                </View>
-                {selectedCol?.submittedBy && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text variant="caption" color="secondary">Submitted by</Text>
-                    <Text variant="caption" style={{ fontWeight: '500' }}>{selectedCol.submittedBy}</Text>
-                  </View>
-                )}
-                {selectedCol?.approvedBy && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text variant="caption" color="secondary">Approved by</Text>
-                    <Text variant="caption" style={{ fontWeight: '500' }}>{selectedCol.approvedBy}</Text>
-                  </View>
-                )}
-                {selectedCol?.depositedBy && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text variant="caption" color="secondary">Deposited by</Text>
-                    <Text variant="caption" style={{ fontWeight: '500' }}>{selectedCol.depositedBy}</Text>
-                  </View>
-                )}
-              </View>
-
-            </ScrollView>
-            
-            <View style={{ padding: spacing.s4, borderTopWidth: 1, borderTopColor: colors.border }}>
-              <Button label="Done" onPress={() => setSelectedCol(null)} />
-            </View>
-            <SafeAreaView />
-          </View>
-        </View>
-      </Modal>
 
       {/* Export Options Modal */}
       <Modal visible={showExportModal} animationType="fade" transparent>

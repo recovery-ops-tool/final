@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { UploadsModal, UploadStatusBadge } from './UploadsModal';
 import { Pagination } from '../components/Pagination';
+import { PageFab } from '../components/PageFab';
 import '../styles/AppPage.css';
 import '../styles/UploadsPage.css';
 import './Dashboard.css';
@@ -235,6 +236,7 @@ export default function UploadsPage() {
           <div className="db-grid">
             <div className="db-span-12">
               <motion.section variants={fadeUp} className="ds-card is-overflow-hidden db-card is-list-card" style={{ display: 'flex', flexDirection: 'column' }}>
+                
                 <header className="db-card-head" style={{ borderBottom: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--ink-primary)' }}>Uploads</h3>
                   
@@ -298,7 +300,7 @@ export default function UploadsPage() {
                 </header>
 
                 {isPlatformAdmin && !confirmedReason && (
-                  <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                         <ShieldAlert size={15} style={{ color: 'var(--warning)' }} />
@@ -328,6 +330,9 @@ export default function UploadsPage() {
                     </form>
                   </div>
                 )}
+
+
+
 
                 <div className="db-card-body" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: 0 }}>
                   {loading ? (
@@ -432,22 +437,7 @@ export default function UploadsPage() {
       </div>
 
       {canUpload && (
-        <button type="button"
-          onClick={() => setShowUploadModal(true)}
-          title="Upload file"
-          aria-label="Upload file"
-          style={{
-            position: 'fixed', bottom: 28, right: 32, zIndex: 50,
-            width: 56, height: 56, borderRadius: '50%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'var(--brand)', border: 'none', color: 'var(--text-on-solid)', cursor: 'pointer',
-            boxShadow: '0 8px 20px color-mix(in srgb, var(--text-primary) 22%, transparent), 0 2px 6px color-mix(in srgb, var(--text-primary) 14%, transparent)',
-            transition: 'transform 120ms ease, box-shadow 120ms ease',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.06)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
-          <Upload size={24} />
-        </button>
+        <PageFab icon={<Upload size={24} />} label="Upload file" onClick={() => setShowUploadModal(true)} />
       )}
 
       {showUploadModal && (

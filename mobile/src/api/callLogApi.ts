@@ -1,6 +1,6 @@
 import axiosInstance from './axiosInstance';
-import type { ApiResponse } from '@/types/core';
-import type { CallLogResponse, CallStartResponse, CompleteCallRequest } from '@/types/domain';
+import type { ApiResponse, PagedResponse } from '@/types/core';
+import type { CallLogResponse, CallOutcome, CallStartResponse, CompleteCallRequest } from '@/types/domain';
 
 export const callLogApi = {
   start: async (allocationId: string): Promise<CallStartResponse> => {
@@ -23,6 +23,13 @@ export const callLogApi = {
 
   getByAllocation: async (allocationId: string): Promise<CallLogResponse[]> => {
     const response = await axiosInstance.get<ApiResponse<CallLogResponse[]>>(`/api/v1/call-logs/allocation/${allocationId}`);
+    return response.data.data;
+  },
+
+  list: async (params: { page?: number; size?: number; outcome?: CallOutcome } = {}): Promise<PagedResponse<CallLogResponse>> => {
+    const response = await axiosInstance.get<ApiResponse<PagedResponse<CallLogResponse>>>('/api/v1/call-logs', {
+      params: { page: params.page ?? 0, size: params.size ?? 30, outcome: params.outcome },
+    });
     return response.data.data;
   },
 };

@@ -91,7 +91,13 @@ public enum AuditAction {
     REPORT_GENERATED(AuditSeverity.INFO),
     REPORT_EXPORTED(AuditSeverity.INFO),
     DATA_EXPORTED(AuditSeverity.HIGH),
-    AUDIT_LOG_EXPORTED(AuditSeverity.HIGH);
+    AUDIT_LOG_EXPORTED(AuditSeverity.HIGH),
+
+    // Call recording (borrower PII/voice data)
+    CALL_STARTED(AuditSeverity.INFO),
+    CALL_RECORDING_UPLOADED(AuditSeverity.INFO),
+    CALL_COMPLETED(AuditSeverity.INFO),
+    CALL_RECORDING_ACCESSED(AuditSeverity.HIGH);
 
     private final AuditSeverity defaultSeverity;
 

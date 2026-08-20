@@ -52,17 +52,16 @@ export default function UnassignedCasesScreen() {
   if (loading) return <LoadingView label="Loading pool cases…" />;
 
   return (
-    <Screen edges={['top']}>
-      <View style={{ gap: spacing.s4, paddingBottom: spacing.s4 }}>
-        <View>
-          <Text variant="title">Unassigned Cases</Text>
-          <Text variant="caption" color="secondary">{cases.length} cases in pool waiting dispatch</Text>
+    <Screen scroll={false} padded={false} edges={['top']}>
+      <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s2, gap: spacing.s4 }}>
+        <View style={{ marginTop: -8 }}>
+          <Text style={{ fontSize: 13, fontWeight: '400', color: colors.ink3, fontFamily: 'Inter_400Regular' }}>Unassigned cases</Text>
         </View>
 
         <View style={{
           flexDirection: 'row', alignItems: 'center', gap: spacing.s2,
           backgroundColor: colors.subtle, borderRadius: radius.md, paddingHorizontal: spacing.s3,
-          borderWidth: 1, borderColor: colors.border,
+          borderWidth: 1, borderColor: colors.border, marginBottom: spacing.s2
         }}
         >
           <Search size={16} color={colors.ink3} />
@@ -83,11 +82,10 @@ export default function UnassignedCasesScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ gap: spacing.s2 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.s4, paddingBottom: spacing.s8, gap: spacing.s2 }}
           renderItem={({ item }) => <CaseRow item={item} />}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          scrollEnabled={false}
           ListEmptyComponent={
             loadError ? (
               <EmptyState icon={WifiOff} title="Couldn't load unassigned pool" message="Pull down to try again." />

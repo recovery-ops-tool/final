@@ -5,7 +5,7 @@ import { usersApi } from '../api/usersApi';
 import type { UserResponse } from '../types';
 import { useAuth } from '../AuthContext';
 import {
-  Building2, AlertCircle, Users, Shield, ChevronDown, ToggleLeft, ToggleRight, SquarePen, Trash2,
+  Building2, AlertCircle, Users, Shield, ChevronDown, ToggleLeft, ToggleRight, SquarePen, Trash2, User,
 } from 'lucide-react';
 import { Modal, ModalFooter, FormSection, Input } from './PlatformSetupShared';
 import { UsersEditModal } from './UsersEditModal';
@@ -183,7 +183,7 @@ export function UsersTab({ orgs, showCreate, setShowCreate }: UsersTabProps) {
                     <tr key={u.id}>
                       <td>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                          <span className="ps-avatar">{initials || '—'}</span>
+                          <span className="ps-avatar">{initials || <User size={14} />}</span>
                           <span style={{ fontWeight: 600, color: 'var(--ink-primary)' }}>{u.firstName} {u.lastName}</span>
                         </div>
                       </td>

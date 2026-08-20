@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, UserCheck, Send, CheckCircle2, Undo2, Check, ArrowUpRight, Search, Wand2 } from 'lucide-react';
+import { Loader2, UserCheck, Send, CheckCircle2, Undo2, Check, ArrowUpRight, Search, Wand2, User } from 'lucide-react';
 import type { UserResponse, AllocationResponse, OptimizedAssignmentOrderResponse } from '../types';
 import { hashColor } from '../utils/navConfig';
 import { Modal, ModalFooter } from './PlatformSetupShared';
@@ -412,7 +412,7 @@ export default function DispatchCasePanel(p: Props) {
                   className="dd-send-bar-avatar"
                   style={{ background: hashColor(`${p.agentObj.firstName}${p.agentObj.lastName}`), color: 'var(--text-on-solid)', border: 'none' }}
                 >
-                  {p.initials(p.agentObj)}
+                  {p.initials(p.agentObj) || <User size={14} />}
                 </div>
                 <div className="dd-send-bar-agent-info">
                   <span className="dd-send-bar-to">To</span>

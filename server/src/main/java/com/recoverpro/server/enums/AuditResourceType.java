@@ -20,5 +20,6 @@ public enum AuditResourceType {
     // SYSTEM 10 TASK 10.4.c: the resource an AUDIT_LOG_EXPORTED event is about is the audit log
     // itself (a filtered slice of unified_audit_events), not any of the domain resources above --
     // REPORT would misleadingly imply a ReportJob row exists for it.
-    AUDIT_LOG
+    AUDIT_LOG,
+    CALL_LOG
 }

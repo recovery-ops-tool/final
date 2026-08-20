@@ -1,0 +1,39 @@
+/* ── PageFab — shared bottom-right circular action button ─────────────────── */
+
+.ds-fab {
+  /* `fixed`, not `absolute`/`sticky` — this must stay pinned to the actual
+     viewport, not scroll away with .app-main (the app shell's real scroll
+     container) or any inner table scroll region. */
+  position: fixed;
+  /* env(safe-area-inset-*) keeps the button clear of notches/home indicators
+     on mobile, matching the safe-area handling AppLayout already does for
+     the topbar. */
+  bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+  right: max(32px, calc(env(safe-area-inset-right, 0px) + 16px));
+  z-index: var(--z-elevated);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand);
+  border: none;
+  color: var(--text-on-solid);
+  cursor: pointer;
+  box-shadow:
+    0 8px 20px color-mix(in srgb, var(--text-primary) 22%, transparent),
+    0 2px 6px color-mix(in srgb, var(--text-primary) 14%, transparent);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.ds-fab:hover {
+  transform: scale(1.06);
+}
+
+@media (max-width: 640px) {
+  .ds-fab {
+    bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+    right: max(16px, calc(env(safe-area-inset-right, 0px) + 12px));
+  }
+}

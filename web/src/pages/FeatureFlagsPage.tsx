@@ -6,6 +6,7 @@ import { featureFlagsApi } from '../api/featureFlagsApi';
 import type { FeatureFlag } from '../api/featureFlagsApi';
 import { platformApi, type OrganizationSummary } from '../api/platformApi';
 import { Modal, ModalFooter, FormSection, Input } from './PlatformSetupShared';
+import { PageFab } from '../components/PageFab';
 import '../styles/AppPage.css';
 import '../styles/PlatformSetupPage.css';
 import './Dashboard.css';
@@ -189,7 +190,7 @@ export default function FeatureFlagsPage() {
       <div className="db-content">
 
         <motion.div className="db-inner" variants={stagger} initial="hidden" animate="show">
-          <motion.div variants={fadeUp} className="db-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, borderBottom: '1px solid var(--border-color)', paddingBottom: 12, marginBottom: 20 }}>
+          <motion.div variants={fadeUp} className="db-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}>
             <p className="dd-page-context" style={{ margin: 0 }}>
               Manage feature flags for the platform and individual organizations
             </p>
@@ -204,38 +205,20 @@ export default function FeatureFlagsPage() {
                   <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-tertiary)', pointerEvents: 'none' }} />
                 </div>
               )}
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="db-kpi-toggle" role="group" aria-label="Feature flag view">
                 <button
                   type="button"
+                  className={`db-kpi-toggle-btn${tab === 'global' ? ' is-active' : ''}`}
                   onClick={() => setTab('global')}
-                  style={{
-                    background: tab === 'global' ? 'var(--brand)' : 'transparent',
-                    color: tab === 'global' ? 'var(--text-on-solid, #fff)' : 'var(--ink-secondary)',
-                    border: tab === 'global' ? '1px solid var(--brand)' : '1px solid var(--border-color)',
-                    borderRadius: 6,
-                    padding: '6px 14px',
-                    fontSize: 13,
-                    fontWeight: tab === 'global' ? 600 : 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
+                  aria-pressed={tab === 'global'}
                 >
                   Flags
                 </button>
                 <button
                   type="button"
+                  className={`db-kpi-toggle-btn${tab === 'overrides' ? ' is-active' : ''}`}
                   onClick={() => setTab('overrides')}
-                  style={{
-                    background: tab === 'overrides' ? 'var(--brand)' : 'transparent',
-                    color: tab === 'overrides' ? 'var(--text-on-solid, #fff)' : 'var(--ink-secondary)',
-                    border: tab === 'overrides' ? '1px solid var(--brand)' : '1px solid var(--border-color)',
-                    borderRadius: 6,
-                    padding: '6px 14px',
-                    fontSize: 13,
-                    fontWeight: tab === 'overrides' ? 600 : 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
+                  aria-pressed={tab === 'overrides'}
                 >
                   Overrides
                 </button>
@@ -488,20 +471,11 @@ export default function FeatureFlagsPage() {
         </motion.div>
       </div>
 
-      <button type="button" onClick={openAdd}
-        title="New feature flag" aria-label="New feature flag"
-        style={{
-          position: 'fixed', bottom: 28, right: 32, zIndex: 50,
-          width: 56, height: 56, borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'var(--brand)', border: 'none', color: 'var(--text-on-solid)', cursor: 'pointer',
-          boxShadow: '0 8px 20px color-mix(in srgb, var(--text-primary) 22%, transparent), 0 2px 6px color-mix(in srgb, var(--text-primary) 14%, transparent)',
-          transition: 'transform 120ms ease, box-shadow 120ms ease',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.06)'; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
-        <Plus size={24} />
-      </button>
+      <PageFab
+        icon={<Plus size={24} />}
+        label="New feature flag"
+        onClick={openAdd}
+      />
     </div>
   );
 }

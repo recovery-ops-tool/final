@@ -52,17 +52,16 @@ export default function LoansScreen() {
   if (loading) return <LoadingView label="Loading loans…" />;
 
   return (
-    <Screen edges={['top']}>
-      <View style={{ gap: spacing.s4, paddingBottom: spacing.s4 }}>
+    <Screen scroll={false} padded={false} edges={['top']}>
+      <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s2, gap: spacing.s4 }}>
         <View>
-          <Text variant="title">Loans & Allocations</Text>
-          <Text variant="caption" color="secondary">{loans.length} total loans registered</Text>
+          <Text style={{ fontSize: 13, fontWeight: '400', color: colors.ink3, fontFamily: 'Inter_400Regular' }}>Loans & allocations</Text>
         </View>
 
         <View style={{
           flexDirection: 'row', alignItems: 'center', gap: spacing.s2,
           backgroundColor: colors.subtle, borderRadius: radius.md, paddingHorizontal: spacing.s3,
-          borderWidth: 1, borderColor: colors.border,
+          borderWidth: 1, borderColor: colors.border, marginBottom: spacing.s2
         }}
         >
           <Search size={16} color={colors.ink3} />
@@ -79,15 +78,15 @@ export default function LoansScreen() {
             </Pressable>
           ) : null}
         </View>
+      </View>
 
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ gap: spacing.s2 }}
-          renderItem={({ item }) => <CaseRow item={item} />}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          scrollEnabled={false}
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingHorizontal: spacing.s4, paddingBottom: spacing.s8, gap: spacing.s2 }}
+        renderItem={({ item }) => <CaseRow item={item} />}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
           ListEmptyComponent={
             loadError ? (
               <EmptyState icon={WifiOff} title="Couldn't load loans" message="Pull down to try again." />
@@ -100,7 +99,6 @@ export default function LoansScreen() {
             )
           }
         />
-      </View>
     </Screen>
   );
 }

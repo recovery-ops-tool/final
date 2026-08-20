@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
-import { View, Image, Alert, Animated } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, Image, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
@@ -7,7 +7,7 @@ import { Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
-import { CalendarCheck, IndianRupee, Handshake, MapPinCheck, CloudOff, RefreshCw, Radio, Bell, ChevronRight } from 'lucide-react-native';
+import { CalendarCheck, IndianRupee, Handshake, MapPinCheck, CloudOff, RefreshCw, Radio, Bell, ChevronRight, Search } from 'lucide-react-native';
 import { useNotificationsBadge } from '@/hooks/useNotificationsBadge';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
@@ -137,44 +137,57 @@ export default function HomeScreen() {
       <StatusBar style="dark" />
       
       <View style={{ paddingHorizontal: spacing.s4, paddingTop: insets.top + spacing.s4, paddingBottom: spacing.s2 }}>
-        {/* Header row: Logo on the left, Icons (Bell & Avatar) on the right */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.s5 }}>
-          <Image 
-            source={require('../../../../assets/images/logo.png')} 
-            style={{ width: 120, height: 32, resizeMode: 'contain', marginLeft: -spacing.s5 }} 
-          />
-          
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s4 }}>
+        {/* Header: Welcome text on left, Avatar on right */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.s6 }}>
+          <View>
+            <Text variant="body" style={{ color: '#4B5563', marginBottom: 2 }}>Welcome back,</Text>
+            <Text
+              style={{
+                color: '#6B7280',
+                fontFamily: 'Inter_700Bold',
+                fontSize: 32,
+                lineHeight: 40,
+                letterSpacing: -0.5
+              }}
+            >
+              {user?.firstName ?? 'Field Officer'}
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s3 }}>
+            {/* Search Icon */}
+            <Pressable
+              onPress={() => router.push('/(org)/search')}
+              style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Search size={20} color="#374151" />
+            </Pressable>
+
+            {/* Bell Icon */}
+            <Pressable
+              onPress={() => router.push('/(org)/(tabs)/notifications')}
+              style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Bell size={20} color="#374151" />
+              {unreadCount > 0 ? (
+                <View style={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFFFFF' }} />
+              ) : null}
+            </Pressable>
 
             {/* Circular Avatar */}
-            <Pressable 
+            <Pressable
               onPress={() => router.push('/(org)/(tabs)/profile')}
-              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#0AA550', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+              style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#0AA550', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
             >
               {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={{ width: 36, height: 36 }} />
+                <Image source={{ uri: avatarUri }} style={{ width: 44, height: 44 }} />
               ) : (
-                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' }}>
                   {(user?.firstName?.[0] ?? 'F') + (user?.lastName?.[0] ?? 'O')}
                 </Text>
               )}
             </Pressable>
           </View>
-        </View>
-
-        <View style={{ marginBottom: spacing.s6, position: 'relative' }}>
-          <Text variant="body" style={{ color: '#4B5563', marginBottom: 2 }}>Welcome back,</Text>
-          <Text 
-            style={{ 
-              color: '#111827', 
-              fontFamily: 'Inter_700Bold', 
-              fontSize: 32,
-              lineHeight: 40,
-              letterSpacing: -0.5
-            }}
-          >
-            {user?.firstName ?? 'Field Officer'}
-          </Text>
         </View>
 
         {pending > 0 ? (
@@ -260,9 +273,12 @@ export default function HomeScreen() {
             <Text style={{ fontSize: 24, fontWeight: '700', color: '#111827' }}>{dashboard ? formatCurrency(dashboard.collectedAmountToday).replace('₹', '₹ ') : '₹ 0'}</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 4 }}>
               <Text style={{ color: '#6B7280', fontSize: 13 }}>Collected today</Text>
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}>
+              <Pressable
+                onPress={() => router.push('/(org)/(tabs)/cases')}
+                style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}
+              >
                 <ChevronRight size={14} color="#111827" />
-              </View>
+              </Pressable>
             </View>
           </View>
 
@@ -274,9 +290,12 @@ export default function HomeScreen() {
             <Text style={{ fontSize: 24, fontWeight: '700', color: '#111827' }}>{dashboard ? String(dashboard.ptpsDueToday) : '0'}</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 4 }}>
               <Text style={{ color: '#6B7280', fontSize: 13 }}>PTPs due today</Text>
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}>
+              <Pressable
+                onPress={() => router.push('/(org)/ptps')}
+                style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}
+              >
                 <ChevronRight size={14} color="#111827" />
-              </View>
+              </Pressable>
             </View>
           </View>
         </View>

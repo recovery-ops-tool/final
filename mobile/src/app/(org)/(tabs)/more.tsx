@@ -36,7 +36,7 @@ export default function MoreScreen() {
         { label: 'My Cases', path: '/(org)/(tabs)/cases', icon: Briefcase, roles: ['FO', 'CALLER', 'TRACER'] },
         { label: 'Loans & Allocations', path: '/(org)/loans', icon: Layers, roles: ['ORG_ADMIN', 'MANAGER', 'TL'] },
         { label: 'Unassigned Cases', path: '/(org)/cases/unassigned', icon: HelpCircle, roles: ['ORG_ADMIN', 'MANAGER', 'TL'] },
-        { label: 'Case Assignments', path: '/(org)/assignments', icon: UserPlus, roles: ['ORG_ADMIN', 'MANAGER', 'TL', 'FO', 'CALLER', 'TRACER'] },
+        { label: 'Case Assignments', path: '/(org)/assignments', icon: UserPlus, roles: ['ORG_ADMIN', 'MANAGER', 'TL', 'CALLER', 'TRACER'] },
         { label: 'Borrowers', path: '/(org)/borrowers', icon: Users, roles: ['ORG_ADMIN'] },
       ]
     },
@@ -45,15 +45,15 @@ export default function MoreScreen() {
       links: [
         { label: 'PTPs (Promise to Pay)', path: '/(org)/ptps', icon: TrendingUp, roles: ['ORG_ADMIN', 'MANAGER', 'TL', 'FO', 'CALLER', 'TRACER'] },
         { label: 'Collections', path: '/(org)/(tabs)/collections', icon: DollarSign, roles: ['ORG_ADMIN', 'MANAGER', 'TL', 'FO', 'CALLER', 'TRACER'] },
-        { label: 'Collections Trend', path: '/(org)/collections/trend', icon: PieChart, roles: ['ORG_ADMIN', 'MANAGER', 'TL', 'FO', 'CALLER', 'TRACER'] },
-        { label: 'Payment Links', path: '/(org)/payments/links', icon: Link, roles: ['ORG_ADMIN', 'FO'] },
+        { label: 'Collections Trend', path: '/(org)/collections/trend', icon: PieChart, roles: ['ORG_ADMIN', 'MANAGER', 'TL', 'CALLER', 'TRACER'] },
+        { label: 'Payment Links', path: '/(org)/payments/links', icon: Link, roles: ['ORG_ADMIN'] },
         { label: 'Reconciliation', path: '/(org)/reconciliation', icon: FileText, roles: ['ORG_ADMIN'] },
       ]
     },
     {
       title: 'Field Operations',
       links: [
-        { label: "Today's Visits", path: '/(org)/(tabs)/index', icon: Calendar, roles: ['FO', 'CALLER', 'TRACER'] },
+        { label: "Today's Visits", path: '/(org)/today', icon: Calendar, roles: ['FO', 'CALLER', 'TRACER'] },
         { label: 'Visited Logs', path: '/(org)/(tabs)/visited', icon: ClipboardCheck, roles: ['FO', 'CALLER', 'TRACER'] },
         { label: 'Daily Dispatch', path: '/(org)/dispatch', icon: MapPin, roles: ['MANAGER', 'TL'] },
         { label: 'Field Agents Roster', path: '/(org)/agents', icon: Users, roles: ['ORG_ADMIN', 'MANAGER', 'TL'] },
@@ -67,7 +67,7 @@ export default function MoreScreen() {
       title: 'Reports & Compliance',
       links: [
         { label: 'Reports', path: '/(org)/reports', icon: FileText, roles: ['ORG_ADMIN', 'MANAGER', 'TL'] },
-        { label: 'Audit Logs', path: '/(org)/audit', icon: History, roles: ['ORG_ADMIN', 'MANAGER', 'TL', 'FO', 'CALLER', 'TRACER'] },
+        { label: 'Audit Logs', path: '/(org)/audit', icon: History, roles: ['ORG_ADMIN', 'MANAGER', 'TL', 'CALLER', 'TRACER'] },
         { label: 'KPI Dashboard', path: '/(org)/kpi', icon: PieChart, roles: ['ORG_ADMIN'] },
       ]
     },
@@ -106,21 +106,23 @@ export default function MoreScreen() {
     .filter(section => section.links.length > 0);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.canvas }]}>
+    <View style={[styles.container, { backgroundColor: colors.canvas, paddingTop: role === 'FO' ? 56 : 0 }]}>
       {/* Search Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text variant="headline" style={styles.headerTitle}>More Features</Text>
-        <View style={[styles.searchBar, { backgroundColor: colors.subtle, borderRadius: radius.md }]}>
-          <Search size={20} color={colors.ink3} style={styles.searchIcon} />
-          <TextInput
-            placeholder="Search features..."
-            placeholderTextColor={colors.ink3}
-            value={search}
-            onChangeText={setSearch}
-            style={[styles.searchInput, { color: colors.ink1 }]}
-          />
+      {role !== 'FO' && (
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <Text variant="headline" style={styles.headerTitle}>More Features</Text>
+          <View style={[styles.searchBar, { backgroundColor: colors.subtle, borderRadius: radius.md }]}>
+            <Search size={20} color={colors.ink3} style={styles.searchIcon} />
+            <TextInput
+              placeholder="Search features..."
+              placeholderTextColor={colors.ink3}
+              value={search}
+              onChangeText={setSearch}
+              style={[styles.searchInput, { color: colors.ink1 }]}
+            />
+          </View>
         </View>
-      </View>
+      )}
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {filteredSections.map((section, idx) => (

@@ -3,7 +3,7 @@ import { View, Pressable, Image, Alert, Modal } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { LogOut, Mail, ShieldCheck, Building2, Camera, FolderOpen, type LucideIcon } from 'lucide-react-native';
+import { LogOut, Mail, ShieldCheck, Building2, Camera, FolderOpen, Lock, type LucideIcon } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme, type Theme } from '@/theme/useTheme';
 import { Screen, Text, Button, Card, Avatar, Divider, Badge } from '@/components/ui';
@@ -94,11 +94,7 @@ export default function ProfileScreen() {
     <Screen>
       <View style={{ gap: spacing.s5 }}>
         <View style={{ alignItems: 'center', gap: spacing.s3, paddingTop: spacing.s4 }}>
-          {/* Logo at the top of Profile Screen */}
-          <Image 
-            source={require('../../../../assets/images/logo.png')} 
-            style={{ width: 130, height: 35, resizeMode: 'contain', alignSelf: 'flex-start', marginLeft: -spacing.s4, marginBottom: spacing.s2 }} 
-          />
+
           <Pressable onPress={handleSelectAvatar} style={{ position: 'relative' }}>
             {avatarUri ? (
               <Image source={{ uri: avatarUri }} style={{ width: 72, height: 72, borderRadius: 36 }} />
@@ -136,13 +132,19 @@ export default function ProfileScreen() {
           <Row icon={Mail} label="Email" value={user?.email ?? '—'} colors={colors} spacing={spacing} />
           <Divider />
           <Row icon={Building2} label="Organization" value={user?.organizationId ? 'Assigned' : 'Not linked'} colors={colors} spacing={spacing} />
+        </Card>
+
+        <Card style={{ gap: 0 }}>
+          <Pressable onPress={() => router.push('/change-password')}>
+            <Row icon={Lock} label="Password" value="Change password" colors={colors} spacing={spacing} />
+          </Pressable>
           <Divider />
           <Pressable onPress={() => router.push('/mfa-setup')}>
             <Row icon={ShieldCheck} label="Two-factor auth" value={user?.mfaEnabled ? 'Enabled' : 'Not enabled'} colors={colors} spacing={spacing} />
           </Pressable>
         </Card>
 
-        <Button label="Log out" variant="outline" onPress={onLogout} loading={loggingOut} icon={<LogOut size={16} color={colors.ink1} />} />
+        <Button label="Log out" variant="danger" onPress={onLogout} loading={loggingOut} icon={<LogOut size={16} color="#FFFFFF" />} />
 
         <Text variant="caption" color="tertiary" style={{ textAlign: 'center' }}>RecoverPro Field · v1.0.0</Text>
       </View>

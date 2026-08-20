@@ -198,7 +198,7 @@ export default function AgentDetailPage() {
   }
 
   const fullName = `${profile.firstName} ${profile.lastName}`.trim();
-  const initials = `${profile.firstName?.[0] ?? ''}${profile.lastName?.[0] ?? ''}`.toUpperCase() || '?';
+  const initials = `${profile.firstName?.[0] ?? ''}${profile.lastName?.[0] ?? ''}`.toUpperCase();
   const color = hashColor(fullName);
 
   return (
@@ -227,7 +227,7 @@ export default function AgentDetailPage() {
                     <ArrowLeft size={14} />
                   </button>
                   <div style={{ width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, background: `${color}20`, border: `1px solid ${color}40`, color }}>
-                    {initials}
+                    {initials || <User size={12} />}
                   </div>
                   <h1 className="dd-page-title">{fullName}</h1>
                   <span className={`ds-pill ${profile.enabled ? 'is-success' : 'is-neutral'}`} style={{ marginLeft: 4 }}>

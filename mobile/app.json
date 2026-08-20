@@ -34,7 +34,8 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "CAMERA",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "SYSTEM_ALERT_WINDOW"
       ]
     },
     "web": {
@@ -47,7 +48,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FFFFFF",
-          "image": "./assets/images/logo.png",
+          "image": "./assets/images/log.png",
           "imageWidth": 200
         }
       ],
@@ -73,7 +74,9 @@
           "microphonePermission": "RecoverPro records short audio clips only after you trigger an SOS alert, so your supervisor can hear what's happening.",
           "enableBackgroundPlayback": false
         }
-      ]
+      ],
+      "@sentry/react-native",
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,

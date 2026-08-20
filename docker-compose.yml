@@ -48,12 +48,6 @@ services:
     volumes:
       - redisdata:/data
 
-  ollama:
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    volumes:
-      - ollama_models:/root/.ollama
-
   backend:
     build: ./server
     restart: unless-stopped
@@ -65,7 +59,6 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
-      LLAMA_BASE_URL: http://ollama:11434
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,7 +90,6 @@ volumes:
   redisdata:
   uploads:
   reports:
-  ollama_models:
   caddy_data:
   caddy_config:
 
