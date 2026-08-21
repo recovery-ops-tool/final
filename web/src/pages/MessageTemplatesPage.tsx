@@ -93,8 +93,8 @@ export default function MessageTemplatesPage() {
       <div className="db-content">
         <motion.div className="db-inner" variants={stagger} initial="hidden" animate="show" style={{ maxWidth: 1100, margin: '0 auto' }}>
 
-          <div className="dd-page-header" style={{ marginBottom: 16 }}>
-            <div className="dd-page-titles" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+          <div className="db-page-header" style={{ marginBottom: 16 }}>
+            <div className="db-page-header-left">
               <span className="dd-page-context" style={{ padding: 0 }}>
                 {!listLoading ? (
                   <>You have <strong>{templates.length} message templates</strong> configured for custom notifications.</>
@@ -103,18 +103,20 @@ export default function MessageTemplatesPage() {
                 )}
               </span>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <select className="ds-input" value={statusFilter} onChange={e => setStatusFilter(e.target.value as MessageTemplateStatus | '')} style={{ height: 32 }}>
+            <div className="db-list-page-actions">
+              <select className="ds-input" value={statusFilter} onChange={e => setStatusFilter(e.target.value as MessageTemplateStatus | '')} style={{ margin: 0 }}>
                 <option value="">All statuses</option>
                 {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              <select className="ds-input" value={channelFilter} onChange={e => setChannelFilter(e.target.value as MessageTemplateChannel | '')} style={{ height: 32 }}>
+              <select className="ds-input" value={channelFilter} onChange={e => setChannelFilter(e.target.value as MessageTemplateChannel | '')} style={{ margin: 0 }}>
                 <option value="">All channels</option>
                 {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <button type="button" className="ds-btn is-secondary is-sm" onClick={loadTemplates} disabled={listLoading} aria-label="Refresh">
-                {listLoading ? <Loader2 size={13} className="ds-spin" /> : <RefreshCw size={13} />} Refresh
-              </button>
+              <div className="db-list-btn-group">
+                <button type="button" className="ds-btn is-secondary" onClick={loadTemplates} disabled={listLoading} aria-label="Refresh">
+                  {listLoading ? <Loader2 size={14} className="ds-spin" /> : <RefreshCw size={14} />} Refresh
+                </button>
+              </div>
             </div>
           </div>
 

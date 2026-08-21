@@ -67,13 +67,15 @@ export default function ReconciliationPage() {
               </p>
             )}
           </div>
-          <div className="db-list-page-actions" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button type="button" onClick={() => setShowIngestModal(true)} className="ds-btn is-primary" style={{ height: 32 }}>
-              <UploadCloud size={14} /> Ingest statement
-            </button>
-            <button type="button" onClick={fetchRuns} disabled={loading} className="ds-btn is-secondary" aria-label="Refresh" title="Refresh" style={{ height: 32 }}>
-              <RefreshCw size={14} className={loading ? 'ds-spin' : ''} /> Refresh
-            </button>
+          <div className="db-list-page-actions">
+            <div className="db-list-btn-group">
+              <button type="button" onClick={fetchRuns} disabled={loading} className="ds-btn is-secondary" aria-label="Refresh" title="Refresh">
+                <RefreshCw size={14} className={loading ? 'ds-spin' : ''} /> Refresh
+              </button>
+              <button type="button" onClick={() => setShowIngestModal(true)} className="ds-btn is-primary">
+                <UploadCloud size={14} /> Ingest statement
+              </button>
+            </div>
           </div>
         </div>
 

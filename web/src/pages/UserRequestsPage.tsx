@@ -69,7 +69,7 @@ export default function UserRequestsPage() {
             )}
           </span>
         </div>
-        <div className="dd-page-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="db-list-page-actions">
           {canApprove && (
             <div className="db-trend-range-toggle" style={{ margin: 0 }}>
               <button type="button" onClick={() => setTab('pending')}
@@ -85,11 +85,13 @@ export default function UserRequestsPage() {
               </button>
             </div>
           )}
-          {canSubmit && (
-            <button type="button" onClick={() => setShowSubmit(true)} className="ds-btn is-primary" style={{ height: 32 }}>
-              <Plus size={14} style={{ marginRight: 6 }} /> New request
-            </button>
-          )}
+          <div className="db-list-btn-group">
+            {canSubmit && (
+              <button type="button" onClick={() => setShowSubmit(true)} className="ds-btn is-primary">
+                <Plus size={14} /> New request
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

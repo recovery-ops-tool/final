@@ -270,24 +270,15 @@ export default function PtpsPage() {
           </div>
           <div className="db-list-page-actions">
             <div className="db-list-btn-group">
-              {canUpdate && !isBankView && (
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(true)}
-                  className="ds-btn is-primary"
-                >
-                  <Plus size={14} /> New PTP
-                </button>
-              )}
               <div ref={exportMenuRef} style={{ position: 'relative' }}>
                 <button
                   type="button"
                   onClick={() => setShowExportMenu(v => !v)}
                   disabled={exporting}
-                  className="ds-btn is-success"
+                  className="ds-btn is-secondary"
                 >
                   <Download size={14} />
-                  {exporting ? 'Exporting…' : 'Export'}
+                  {exporting ? 'Exporting...' : 'Export'}
                 </button>
                 <AnimatePresence>
                   {showExportMenu && (
@@ -312,6 +303,15 @@ export default function PtpsPage() {
                   )}
                 </AnimatePresence>
               </div>
+              {canUpdate && !isBankView && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="ds-btn is-primary"
+                >
+                  <Plus size={14} /> New PTP
+                </button>
+              )}
 
               <button
                 type="button"
@@ -536,3 +536,4 @@ export default function PtpsPage() {
     </div>
   );
 }
+

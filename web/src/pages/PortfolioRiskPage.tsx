@@ -155,20 +155,22 @@ export default function PortfolioRiskPage() {
                 Review portfolio risk and manage flagged cases
               </p>
             </div>
-            <div className="db-kpi-toggle" style={{ border: 'none', background: 'transparent', padding: 0, gap: 12 }}>
+            <div className="db-list-page-actions">
               <input type="date" value={date} max={todayStr()} onChange={e => setDate(e.target.value)}
-                className="ds-input" style={{ height: 32, fontSize: 13, width: 148 }} />
-              <button type="button" onClick={() => setFilterOpen(true)} className={`ds-btn ${riskFilter !== 'ALL' ? 'is-primary' : 'is-secondary'}`} style={{ height: 32 }}>
-                <ListFilter size={13} /> Filter
-              </button>
-              <button type="button" onClick={loadReport} disabled={reportLoading} className="ds-btn is-secondary" style={{ height: 32 }}>
-                <RefreshCw size={13} className={reportLoading ? 'ds-spin' : ''} /> Refresh
-              </button>
-              {canFlag && (
-                <button type="button" onClick={() => setShowSweep(v => !v)} className="ds-btn is-primary" style={{ height: 32 }}>
-                  <ShieldAlert size={13} /> Re-run sweep
+                className="ds-input" style={{ fontSize: 13, width: 148, margin: 0 }} />
+              <div className="db-list-btn-group">
+                <button type="button" onClick={() => setFilterOpen(true)} className={`ds-btn ${riskFilter !== 'ALL' ? 'is-primary' : 'is-secondary'}`}>
+                  <ListFilter size={13} /> Filter
                 </button>
-              )}
+                <button type="button" onClick={loadReport} disabled={reportLoading} className="ds-btn is-secondary">
+                  <RefreshCw size={13} className={reportLoading ? 'ds-spin' : ''} /> Refresh
+                </button>
+                {canFlag && (
+                  <button type="button" onClick={() => setShowSweep(v => !v)} className="ds-btn is-primary">
+                    <ShieldAlert size={13} /> Re-run sweep
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

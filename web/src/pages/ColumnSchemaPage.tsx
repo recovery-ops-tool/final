@@ -3,7 +3,7 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useAuth } from '../AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { columnSchemasApi, type ColumnSchemaResponse } from '../api/columnSchemasApi';
-import { Plus, SquarePen, X, AlertCircle, Columns, Check, Trash2, Loader2, ChevronDown } from 'lucide-react';
+import { Plus, SquarePen, X, AlertCircle, Columns, Check, Trash2, Loader2, ChevronDown, RefreshCw } from 'lucide-react';
 import { RowForm, type RowFormState, EMPTY_FORM, TYPE_VARIANT } from './ColumnSchemaRowForm';
 import type { UploadType } from '../types/reports';
 import '../styles/AppPage.css';
@@ -123,8 +123,8 @@ export default function ColumnSchemaPage() {
         )}
       </AnimatePresence>
 
-      <div className="dd-page-header">
-        <div className="dd-page-titles">
+      <div className="db-page-header">
+        <div className="db-page-header-left">
           <h1 className="dd-page-title">Column Schema</h1>
           <span className="dd-page-context">
             {!loading ? (
@@ -138,19 +138,24 @@ export default function ColumnSchemaPage() {
             )}
           </span>
         </div>
-        <div className="dd-page-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="db-list-page-actions">
           {columns.length > 0 && (
-            <span className="dd-kpi2-foot-meta" style={{ display: 'flex', alignItems: 'center', fontSize: 13 }}>
+            <span className="dd-kpi2-foot-meta" style={{ display: 'flex', alignItems: 'center', fontSize: 13, marginRight: 8 }}>
               <strong style={{ color: 'var(--text-primary)' }}>{columns.filter((c) => c.isRequired).length}</strong>&nbsp;required
-              &nbsp;·&nbsp;
+              &nbsp;&middot;&nbsp;
               <strong style={{ color: 'var(--text-primary)' }}>{columns.filter((c) => c.isSearchable).length}</strong>&nbsp;searchable
             </span>
           )}
-          {!adding && editingId === null && canCreate && entityType !== '' && (
-            <button type="button" onClick={() => setAdding(true)} className="ds-btn is-primary" style={{ height: 32 }}>
-              <Plus size={14} style={{ marginRight: 6 }} /> Add column
+          <div className="db-list-btn-group">
+            <button type="button" onClick={load} disabled={loading} className="ds-btn is-secondary" aria-label="Refresh" title="Refresh">
+              <RefreshCw size={14} className={loading ? 'ds-spin' : ''} /> Refresh
             </button>
-          )}
+            {!adding && editingId === null && canCreate && entityType !== '' && (
+              <button type="button" onClick={() => setAdding(true)} className="ds-btn is-primary">
+                <Plus size={14} /> Add column
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -319,3 +324,6 @@ export default function ColumnSchemaPage() {
     </div>
   );
 }
+
+
+

@@ -203,15 +203,17 @@ export default function NonContactablesPage() {
               </p>
             )}
           </div>
-          <div className="db-list-page-actions" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            {canCreate && (
-              <button type="button" onClick={() => setShowCreateModal(true)} className="ds-btn is-primary" style={{ height: 32 }}>
-                <Plus size={14} /> Record outcome
+          <div className="db-list-page-actions">
+            <div className="db-list-btn-group">
+              <button type="button" onClick={fetchRecords} disabled={loading} className="ds-btn is-secondary" aria-label="Refresh" title="Refresh">
+                <RefreshCw size={14} className={loading ? 'ds-spin' : ''} /> Refresh
               </button>
-            )}
-            <button type="button" onClick={fetchRecords} disabled={loading} className="ds-btn is-secondary" aria-label="Refresh" title="Refresh" style={{ height: 32 }}>
-              <RefreshCw size={14} className={loading ? 'ds-spin' : ''} /> Refresh
-            </button>
+              {canCreate && (
+                <button type="button" onClick={() => setShowCreateModal(true)} className="ds-btn is-primary">
+                  <Plus size={14} /> Record outcome
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

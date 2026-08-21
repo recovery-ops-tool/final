@@ -168,18 +168,18 @@ export default function RoleManagementPage() {
               )}
             </p>
           </div>
-          <div className="db-list-page-actions" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            {canAssign && (
-              <button
-                type="button"
-                onClick={() => { setShowCreateForm(!showCreateForm); setSaveError(null); }}
-                className={`ds-btn ${showCreateForm ? 'is-secondary' : 'is-primary'}`}
-                style={{ height: 32 }}
-              >
-                {showCreateForm ? <X size={14} style={{ marginRight: 6 }} /> : <Plus size={14} style={{ marginRight: 6 }} />}
-                {showCreateForm ? 'Cancel' : 'New role'}
-              </button>
-            )}
+          <div className="db-list-page-actions">
+            <div className="db-list-btn-group">
+              {canAssign && (
+                <button
+                  type="button"
+                  onClick={() => { setShowCreateForm(!showCreateForm); setSaveError(null); }}
+                  className={`ds-btn ${showCreateForm ? 'is-secondary' : 'is-primary'}`}
+                >
+                  {showCreateForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> New role</>}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

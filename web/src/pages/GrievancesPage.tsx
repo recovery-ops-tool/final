@@ -109,23 +109,25 @@ export default function GrievancesPage() {
               </p>
             )}
           </div>
-          <div className="db-list-page-actions" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div className="db-list-page-actions">
             <select
               className="ds-select"
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value as GrievanceStatus | ''); setPage(0); }}
-              style={{ width: 'auto', height: 32 }}
+              style={{ width: 'auto', margin: 0 }}
             >
               {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            {canRaise && (
-              <button type="button" onClick={() => setShowCreateModal(true)} className="ds-btn is-primary" style={{ height: 32 }}>
-                <Plus size={14} /> Raise grievance
+            <div className="db-list-btn-group">
+              <button type="button" onClick={fetchGrievances} disabled={loading} className="ds-btn is-secondary" aria-label="Refresh" title="Refresh">
+                <RefreshCcw size={14} className={loading ? 'ds-spin' : ''} /> Refresh
               </button>
-            )}
-            <button type="button" onClick={fetchGrievances} disabled={loading} className="ds-btn is-secondary" aria-label="Refresh" title="Refresh" style={{ height: 32 }}>
-              <RefreshCcw size={14} className={loading ? 'ds-spin' : ''} /> Refresh
-            </button>
+              {canRaise && (
+                <button type="button" onClick={() => setShowCreateModal(true)} className="ds-btn is-primary">
+                  <Plus size={14} /> Raise grievance
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

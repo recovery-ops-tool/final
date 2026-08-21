@@ -224,11 +224,13 @@ export default function UploadsPage() {
             <p className="dd-page-context">
               You have <strong>{fmtNum(filesAnim)} files</strong> with <strong>{fmtNum(rowsAnim)} rows</strong>, <span style={{ color: failedAnim > 0 ? 'var(--error)' : 'inherit', fontWeight: failedAnim > 0 ? 500 : 'inherit' }}>{fmtNum(failedAnim)} failed</span> and <span style={{ color: inFlightCount > 0 ? 'var(--warning)' : 'inherit', fontWeight: inFlightCount > 0 ? 500 : 'inherit' }}>{fmtNum(inFlightCount)} processing</span>.
             </p>
-            <div className="db-kpi-toggle" style={{ border: 'none', background: 'transparent', padding: 0, gap: 16, alignItems: 'center' }}>
-              <button type="button" className="ds-btn is-secondary" style={{ height: 32 }}
-                onClick={() => navigate('/app/settings/schema')}>
-                <TableProperties size={14} /> Column Schemas
-              </button>
+            <div className="db-list-page-actions">
+              <div className="db-list-btn-group">
+                <button type="button" className="ds-btn is-secondary"
+                  onClick={() => navigate('/app/settings/schema')}>
+                  <TableProperties size={14} /> Column Schemas
+                </button>
+              </div>
             </div>
           </div>
 

@@ -97,23 +97,25 @@ export default function FraudCasesPage() {
               </p>
             )}
           </div>
-          <div className="db-list-page-actions" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div className="db-list-page-actions">
             <select
               className="ds-select"
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value as FraudCaseStatus | ''); setPage(0); }}
-              style={{ width: 'auto', height: 32 }}
+              style={{ width: 'auto', margin: 0 }}
             >
               {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            {canTransition && (
-              <button type="button" onClick={() => setShowCreateModal(true)} className="ds-btn is-primary" style={{ height: 32 }}>
-                <Plus size={14} /> Report case
+            <div className="db-list-btn-group">
+              <button type="button" onClick={fetchCases} disabled={loading} className="ds-btn is-secondary" aria-label="Refresh" title="Refresh">
+                <RefreshCw size={14} className={loading ? 'ds-spin' : ''} /> Refresh
               </button>
-            )}
-            <button type="button" onClick={fetchCases} disabled={loading} className="ds-btn is-secondary" aria-label="Refresh" title="Refresh" style={{ height: 32 }}>
-              <RefreshCw size={14} className={loading ? 'ds-spin' : ''} /> Refresh
-            </button>
+              {canTransition && (
+                <button type="button" onClick={() => setShowCreateModal(true)} className="ds-btn is-primary">
+                  <Plus size={14} /> Report case
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
